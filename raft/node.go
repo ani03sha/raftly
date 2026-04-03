@@ -116,6 +116,7 @@ type RaftNode struct {
 	// Timers
 	electionTimer *time.Timer
 	electionTimeout time.Duration // randomized; reset on every valid heartbeat
+	lastLeaderContactTime time.Time // last time we heart from a valid leader, used bu pre-vote
 
 	// Channels
 	// commitCh: applied entries flow out here to the application layer (key-value store).
@@ -308,6 +309,10 @@ func (n *RaftNode) becomeFollower(term uint64, leaderID string) {
 		_ = n.wal.Sync()
 	}
 
+	if leaderID != "" {
+		n.lastLeaderContactTime = time.Now()
+	}
+
 	n.resetElectionTimer()
 }
 
@@ -405,7 +410,7 @@ func (n *RaftNode) run() {
 			n.mu.Unlock()
 			if state != Leader {
 				// campaign() handles locking internally - it spans multiple RPCs
-				n.campaign(n.config.EnablePreVote)
+				go n.campaign(n.config.EnablePreVote)
 			} else {
 				// Leaders don't hold elections; just reset the timer.
 				n.mu.Lock()

@@ -234,6 +234,7 @@ func (n *RaftNode) Propose(data []byte) (index uint64, term uint64, err error) {
 		return 0, 0, fmt.Errorf("WAL sync: %w", err)
 	}
 	if err = n.log.Append([]LogEntry{entry}); err != nil {
+		go n.maybeSendHeartbeats() // trigger immediate replication instead of waiting for next tick
 		n.mu.Unlock()
 		return 0, 0, fmt.Errorf("log append: %w", err)
 	}

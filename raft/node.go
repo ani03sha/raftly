@@ -434,3 +434,20 @@ func (n *RaftNode) notifyProposal(index uint64, err error) {
 		delete(n.proposals, index)
 	}
 }
+
+
+// HandleRequestVote is the exported entry point for incoming RequestVote RPCs.
+// Called by the transport layer when a peer requests our vote.
+func (n *RaftNode) HandleRequestVote(req VoteRequest) VoteResponse {
+	return n.handleRequestVote(req)
+}
+
+// HandlePreVote is the exported entry point for incoming PreVote RPCs.
+func (n *RaftNode) HandlePreVote(req VoteRequest) VoteResponse {
+	return n.handlePreVote(req)
+}
+
+// HandleAppendEntries is the exported entry point for incoming AppendEntries RPCs.
+func (n *RaftNode) HandleAppendEntries(req AppendEntriesRequest) AppendEntriesResponse {
+	return n.handleAppendEntries(req)
+}

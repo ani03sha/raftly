@@ -39,8 +39,8 @@ func New(cfg *ServerConfig) (*Server, error) {
 
 	// Build the gRPC peers map from the Raft config's peer list
 	grpcPeers := make(map[string]string, len(cfg.Raft.Peers))
-	for _, p := cfg.Raft.Peers {
-		grpcPeers[p.ID] = p,Address
+	for _, p := range cfg.Raft.Peers {
+		grpcPeers[p.ID] = p.Address
 	}
 
 	proxy := transport.NewNetworkProxy() // no chaos rules by default
@@ -58,7 +58,7 @@ func New(cfg *ServerConfig) (*Server, error) {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	httpServer := &http.Server{
-			Addr:    cfg.HTTPAddr,
+			Addr:    cfg.HttpAddr,
 			Handler: mux,
 	}
 
@@ -109,7 +109,7 @@ func (s *Server) Stop(ctx context.Context) {
 	s.httpServer.Shutdown(ctx) // stop accepting new requests
 	s.kv.Stop()                // drain apply loop
 	s.node.Stop()              // closes WAL + stopCh
-	s.grpc.Close()             // close gRPC connections
+	s.grpc.Close()             // close gRPC connections (Close() is the exported version)
 }
 
 // Polls node status and updates Prometheus gauges once per second.

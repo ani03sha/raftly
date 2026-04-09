@@ -71,7 +71,7 @@ func (kv *KVStore) applyLoop() {
 
 
 // Apply decodes one committed log entry and mutates the state machine.
-func (kv *KVStore) apply(entry raft.LogeEntry) {
+func (kv *KVStore) apply(entry raft.LogEntry) {
 	var cmd Command
 	if err := json.Unmarshal(entry.Data, &cmd); err != nil {
 		return // malformed entry - skip
@@ -155,7 +155,7 @@ func (kv *KVStore) HandleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := strings.TrimPrefix(r.url.Path, "/keys")
+	key := strings.TrimPrefix(r.URL.Path, "/keys")
 	if key == "" {
 		http.Error(w, "key required", http.StatusBadRequest)
 		return

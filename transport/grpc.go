@@ -72,7 +72,7 @@ func (t *GRPCTransport) Register(node *raft.RaftNode) {
 
 
 // Shuts down the gRPC server and all outbound client connections.
-func (t *GRPCTransport) close() error {
+func (t *GRPCTransport) Close() error {
 	if t.server != nil {
 		t.server.GracefulStop() // waits for in-flight RPCs to complete
 	}

@@ -24,9 +24,10 @@ type Metrics struct {
 
 
 func NewMetrics() *Metrics {
-	CurrentTerm: promauto.NewGauge(prometheus.GaugeOpts{
-			Name: "raftly_current_term",
-			Help: "Current Raft term number",
+	return &Metrics{
+		CurrentTerm: promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "raftly_current_term",
+		Help: "Current Raft term number",
 		}),
 		State: promauto.NewGauge(prometheus.GaugeOpts{
 			Name: "raftly_state",
@@ -61,7 +62,8 @@ func NewMetrics() *Metrics {
 			Name:    "raftly_wal_fsync_duration_ms",
 			Help:    "WAL fsync latency in milliseconds",
 			Buckets: prometheus.ExponentialBuckets(0.1, 2, 12), // 0.1ms to ~400ms
-	}),
+		}),
+	}
 }
 
 

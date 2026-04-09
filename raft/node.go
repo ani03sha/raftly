@@ -451,3 +451,7 @@ func (n *RaftNode) HandlePreVote(req VoteRequest) VoteResponse {
 func (n *RaftNode) HandleAppendEntries(req AppendEntriesRequest) AppendEntriesResponse {
 	return n.handleAppendEntries(req)
 }
+
+func (n *RaftNode) WALPath() string {
+	return n.wal.Path()
+}

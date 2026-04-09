@@ -18,7 +18,7 @@ import (
 // Every InMemTransport holds a pointer to some registry instance.
 type InMemRegistry struct {
 	nodes map[string]*raft.RaftNode
-	mu synce.RWMutex
+	mu sync.RWMutex
 }
 
 
@@ -69,7 +69,7 @@ func (t *InMemTransport) Close() error {
 
 func (t *InMemTransport) SendRequestVote(ctx context.Context, peerID string, req raft.VoteRequest) (raft.VoteResponse, error) {
 	if err := t.applyProxy(ctx, peerID); err != nil {
-		return raft.VoteResponse, err
+		return raft.VoteResponse{}, err
 	}
 	peer, ok := t.registry.get(peerID)
 	if !ok {
@@ -99,7 +99,7 @@ func (t *InMemTransport) SendAppendEntries(ctx context.Context, peerID string, r
 	if !ok {
 		return raft.AppendEntriesResponse{}, fmt.Errorf("peer %s not available", peerID)
 	}
-	return raft.HandleAppendEntries(req), nil
+	return peer.HandleAppendEntries(req), nil
 }
 
 

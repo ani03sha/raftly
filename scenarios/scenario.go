@@ -31,7 +31,7 @@ type ScenarioResult struct {
 type Cluster struct {
 	NodeIDs []string
 	Nodes map[string]*raft.RaftNode
-	Proxy *proxy.NetworkProxy
+	Proxy *transport.NetworkProxy
 	Injector *chaos.ChaosInjector
 	registry *transport.InMemRegistry
 	dataDir string
@@ -50,7 +50,7 @@ func NewCluster(nodeIDs []string, dataDir string) (*Cluster, error) {
 
 	// Build peer config lists
 	allPeers := make([]raft.PeerConfig, len(nodeIDs))
-	if i, id := range nodeIDs {
+	for i, id := range nodeIDs {
 		allPeers[i] = raft.PeerConfig{ID: id}
 	}
 
@@ -84,11 +84,11 @@ func NewCluster(nodeIDs []string, dataDir string) (*Cluster, error) {
 			}
 		}
 		t := transport.NewInMemTransport(nodeID, proxy, registry)
-		return raft.NewRaftNode(cft, t)
+		return raft.NewRaftNode(cfg, t)
 	})
 
 	return &Cluster{
-		nodeIDs: nodeIDs,
+		NodeIDs: nodeIDs,
 		Nodes: nodes,
 		Proxy: proxy,
 		Injector: injector,
@@ -100,7 +100,7 @@ func NewCluster(nodeIDs []string, dataDir string) (*Cluster, error) {
 
 // Starts all nodes and returns after all goroutines are running.
 func (c *Cluster) Start() error {
-	for _, id := range c.Nodes {
+	for _, id := range c.NodeIDs {
 		if err := c.Nodes[id].Start(); err != nil {
 			return fmt.Errorf("start %s: %w", id, err)
 		}
@@ -119,7 +119,7 @@ func (c *Cluster) Stop() {
 
 // Cleanup removes all data directories
 func (c *Cluster) Cleanup() {
-	os.RemoveAll(c.DataDir)
+	os.RemoveAll(c.dataDir)
 }
 
 

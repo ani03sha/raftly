@@ -3,6 +3,8 @@ package scenarios
 import (
 	"fmt"
 	"time"
+
+	"github.com/ani03sha/raftly/raft"
 )
 
 
@@ -20,11 +22,11 @@ func (s *SplitBrainScenario) Name() string {
 
 
 func (s *SplitBrainScenario) Run() (*ScenarioResult, error) {
-	return := &ScenarioResult{Summary: make(map[string]string)}
+	result := &ScenarioResult{Summary: make(map[string]string)}
 
 	// 1. Start a 3-node cluster
 	cluster, err := NewCluster([]string{"node1", "node2", "node3"}, s.DataDir)
-	if err := nil {
+	if err != nil {
 		return nil, err
 	}
 	defer cluster.Cleanup()
@@ -95,7 +97,7 @@ func (s *SplitBrainScenario) Run() (*ScenarioResult, error) {
 	// 7. Write through the new leader
 	newLeader := cluster.Nodes[newLeaderID]
 	for i := 1; i <= 5; i++ {
-		if err := ProposeWithTimeout(newLeader, []bytes(fmt.Sprintf("new-leader-%d", i)), 500 * time.Millisecond); err != nil {
+		if err := ProposeWithTimeout(newLeader, []byte(fmt.Sprintf("new-leader-%d", i)), 500 * time.Millisecond); err != nil {
 			cluster.Injector.RecordObservation(fmt.Sprintf("new-leader write %d failed: %v", i, err))
 		}
 	}
@@ -106,7 +108,7 @@ func (s *SplitBrainScenario) Run() (*ScenarioResult, error) {
 
 	// 9. Observe final state
 	postHealCommit := leader.Status().CommitIndex
-	postHealLogIndex = leader.Status().LogIndex
+	postHealLogIndex := leader.Status().LogIndex
 	cluster.Injector.RecordObservation(fmt.Sprintf("post-heal: old leader commit=%d log=%d (isolated log entries truncated: %v)",
                 postHealCommit, postHealLogIndex, postHealLogIndex == postHealCommit))
 
@@ -118,7 +120,7 @@ func (s *SplitBrainScenario) Run() (*ScenarioResult, error) {
 	result.Summary["isolated_commits"] = fmt.Sprintf("%d", isolatedWrites)
 	result.Summary["cluster_consistent"] = fmt.Sprintf("%v", consistent)
 	result.Passed = isolatedWrites == 0 && consistent
-	result.observations = cluster.Injector.Report()
+	result.Observations = cluster.Injector.Report()
 
 	return result, nil
 }

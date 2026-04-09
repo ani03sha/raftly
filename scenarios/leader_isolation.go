@@ -24,7 +24,7 @@ func (s *LeaderIsolationScenario) Run() (*ScenarioResult, error) {
 		return nil, err
 	}
 	defer cluster.Cleanup()
-	if err := Cluster.Start(); err != nil {
+	if err := cluster.Start(); err != nil {
 		return nil, err
 	}
 	defer cluster.Stop()
@@ -74,7 +74,7 @@ func (s *LeaderIsolationScenario) Run() (*ScenarioResult, error) {
 	// 5. Verify: the old leader's log has converged back to the cluster's state.
 	postHealCommit := leader.Status().CommitIndex
 	postHealLog := leader.Status().LogIndex
-	survivingISolatedEntries := postHealLog - baselineCommit
+	survivingIsolatedWrites := postHealLog - baselineCommit
 
 	cluster.Injector.RecordObservation(fmt.Sprintf(
                 "post-heal: commit=%d log=%d surviving-isolated-entries=%d",

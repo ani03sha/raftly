@@ -128,6 +128,9 @@ func (n *RaftNode) maybeSendHeartbeats() {
 		n.mu.Unlock()
 		return
 	}
+	// Commit run checks every heartbeat tick. For single-node clusters, this is the only trigger because
+	// there are no peers whose replicateTo() would call maybeCommit()
+	n.maybeCommit()
 	peerIDs := make([]string, 0, len(n.peers))
 	for id := range n.peers {
 		peerIDs = append(peerIDs, id)
@@ -138,6 +141,7 @@ func (n *RaftNode) maybeSendHeartbeats() {
 	for _, peerID := range peerIDs {
 		go n.replicateTo(peerID)
 	}
+	go n.applyCommitted() // also trigger apply in case we committed something on this tick
 }
 
 
@@ -333,4 +337,8 @@ func (n *RaftNode) applyCommitted() {
 		n.notifyProposal(entry.Index, nil)
 		n.mu.Unlock()
 	}
+}
+
+func (w *WAL) Path() string {
+	return w.path
 }

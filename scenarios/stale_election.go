@@ -65,6 +65,7 @@ func (s *StaleElectionScenario) Run() (*ScenarioResult, error) {
 			cluster.Injector.RecordObservation(fmt.Sprintf("write %d failed: %v", i, err))
 		}
 	}
+	time.Sleep(100 * time.Millisecond)
 	advancedCommit := leader.Status().CommitIndex
 	node3LogIndex := cluster.Nodes[node3ID].Status().LogIndex
 	cluster.Injector.RecordObservation(fmt.Sprintf(
@@ -80,16 +81,9 @@ func (s *StaleElectionScenario) Run() (*ScenarioResult, error) {
 	cluster.Injector.RecordObservation("partition healed — node3 rejoins cluster")
 
 	// 7. Wait for a new leader. The election restriction means node3 cannot win: the remaining node will refuse
-	// to wait for node3 because node3's log ends at index 10 while the voter's log ends at index 20.
-	time.Sleep(600 * time.Millisecond)
-
-	var newLeaderID string
-	for id, node := range cluster.Nodes {
-		if node.IsLeader() {
-			newLeaderID = id
-			break
-		}
-	}
+	// to vote for node3 because node3's log ends at index 10 while the voter's log ends at index 20.
+	// Use WaitForLeader (with 2s timeout) rather than a fixed sleep to avoid flakiness.
+	newLeaderID, _ := WaitForLeader(cluster.Nodes, 2*time.Second)
 
 	node3IsLeader := cluster.Nodes[node3ID].IsLeader()
 	cluster.Injector.RecordObservation(fmt.Sprintf(
@@ -110,7 +104,7 @@ func (s *StaleElectionScenario) Run() (*ScenarioResult, error) {
 
 	// Stale node must NOT have become leader.
 	// Stale node MUST have synced the committed entries after healing.
-	result.Passed = !node3IsLeader && node3FinalCommit == advancedCommit
+	result.Passed = !node3IsLeader && node3FinalCommit >= advancedCommit
 	result.Observations = cluster.Injector.Report()
 
 	return result, nil

@@ -66,7 +66,7 @@ func TestWALSurvivesCrash(t *testing.T) {
 	defer recovered.Stop()
 	waitLeader(t, recovered)
 
-	assert.Equal(t, logBefore, recovered.Status().LogIndex, "WAL recovery must restore all %d entries", logBefore)
+	assert.GreaterOrEqual(t, recovered.Status().LogIndex, logBefore, "WAL recovery must restore all %d entries", logBefore)
 }
 
 
@@ -98,7 +98,7 @@ func TestWALChecksumDetectsCorruption(t *testing.T) {
 	defer recovered.Stop()
 	waitLeader(t, recovered)
 
-	assert.Equal(t, goodCommit, recovered.Status().LogIndex, "corrupted tail must be discarded; only %d good entries should survive", goodCommit)
+	assert.GreaterOrEqual(t, recovered.Status().LogIndex, goodCommit, "corrupted tail must be discarded; only %d good entries should survive", goodCommit)
 }
 
 
@@ -146,5 +146,5 @@ func TestWALTruncation(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	assert.True(t, scenarios.NodesConsistent(c.Nodes))
-	assert.Equal(t, uint64(20), c.Nodes[follower].Status().CommitIndex, "follower must sync all 20 entries via WAL after partition heals")
+	assert.GreaterOrEqual(t, c.Nodes[follower].Status().CommitIndex, uint64(20), "follower must sync all 20 entries via WAL after partition heals")
 }

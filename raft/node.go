@@ -130,6 +130,7 @@ type RaftNode struct {
 	proposals map[uint64]chan proposeResult
 
 	mu sync.Mutex
+	stopOnce sync.Once
 }
 
 
@@ -194,12 +195,17 @@ func (n *RaftNode) Start() error {
 // Shuts the node down cleanly.
 // Closing stopCh is a broadcast - every goroutine selecting on its exit.
 func (n* RaftNode) Stop() {
-	close(n.stopCh)
 	n.mu.Lock()
+	n.state = Follower   // stopped node must not appear as leader
 	if n.electionTimer != nil {
 		n.electionTimer.Stop()
 	}
 	n.mu.Unlock()
+
+	n.stopOnce.Do(func() {
+		close(n.stopCh)
+	})
+
 	n.wal.Close()
 }
 
@@ -339,19 +345,23 @@ func (n *RaftNode) becomeLeader() {
 	n.state = Leader
 	n.leaderID = n.id
 
-	// Initialize per-follower tracking.
-	// nextIndex is optimistic: start at our lastIndex + 1
-	// matchIndex is pessimistic: start at 0 (we know nothing about the follower's log yet).
 	lastIndex := n.log.LastIndex()
 	for _, peer := range n.peers {
 		peer.NextIndex = lastIndex + 1
 		peer.MatchIndex = 0
 	}
 
-	// Leaders don't wait for election timeout
-	n.electionTimer.Stop()
+	noop := LogEntry{
+		Index: lastIndex + 1,
+		Term:  n.currentTerm,
+		Type:  EntryNormal,
+		Data:  nil,
+	}
+	_ = n.wal.SaveEntry(noop)
+	_ = n.wal.Sync()
+	_ = n.log.Append([]LogEntry{noop})
 
-	// Assert leadership immediately with a heartbeat
+	n.electionTimer.Stop()
 	go n.maybeSendHeartbeats()
 }
 

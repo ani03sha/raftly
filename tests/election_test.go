@@ -22,7 +22,7 @@ func newCluster(t *testing.T, count int) *scenarios.Cluster {
 	for i := range ids {
 		ids[i] = fmt.Sprintf("n%d", i + 1)
 	}
-	c, err := scenarios.newCluster(ids, t.TempDir())
+	c, err := scenarios.NewCluster(ids, t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func(){
 		c.Stop(); c.Cleanup()
@@ -71,13 +71,22 @@ func TestNoElectionWithMinority(t *testing.T) {
 	leader, err := scenarios.WaitForLeader(c.Nodes, electionWait)
 	require.NoError(t, err)
 
+	// Partition a follower — it becomes a minority of 1 and cannot reach quorum.
+	var isolated string
+	for id := range c.Nodes {
+		if id != leader {
+			isolated = id
+			break
+		}
+	}
+
 	// duration=0 means permanent partition until Heal() is called
-	c.Injector.PartitionNode(leader, 0)
+	c.Injector.PartitionNode(isolated, 0)
 
 	// Give it time to attempt (and fail) elections
 	time.Sleep(electionWait * 2)
 
-	assert.False(t, c.Nodes[leader].IsLeader(), "isolated minority must not become leader — quorum unreachable")
+	assert.False(t, c.Nodes[isolated].IsLeader(), "isolated minority must not become leader — quorum unreachable")
 }
 
 

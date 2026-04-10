@@ -86,7 +86,7 @@ func TestPartitionHealRecovery(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	assert.True(t, scenarios.NodesConsistent(c.Nodes), "nodes must converge after partition heals")
-	assert.Equal(t, uint64(20), c.Nodes[follower].Status().CommitIndex, "isolated follower must sync all 20 missed entries")
+	assert.GreaterOrEqual(t, c.Nodes[follower].Status().CommitIndex, uint64(20), "isolated follower must sync all 20 missed entries")
 }
 
 

@@ -31,7 +31,7 @@ func (n *RaftNode) campaign(preVote bool) {
 
 	var campaignTerm uint64
 	if preVote {
-		n.state = Candidate
+		n.state = PreCandidate
 		campaignTerm = n.currentTerm + 1
 		// Pre-Vote uses term + 1 in request but doesn't persist or increment yet
 	} else {

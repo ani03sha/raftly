@@ -36,7 +36,7 @@ func main() {
 	}
 	
 	cfg := &server.ServerConfig{
-		Raft: &raftConfig{
+		Raft: &raft.Config{
 			NodeID:            *nodeID,
 			Peers:             parseGRPCPeers(*peers),
 			ElectionTimeout:   150 * time.Millisecond,
@@ -47,7 +47,7 @@ func main() {
 			EnablePreVote:     true,
 		},
 		GRPCAddr: *grpcAddr,
-		HTTPAddr: *httpAddr,
+		HttpAddr: *httpAddr,
 		HTTPPeers: parseHTTPPeers(*httpPeers),
 	}
 

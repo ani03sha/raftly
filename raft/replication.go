@@ -175,7 +175,7 @@ func (n *RaftNode) replicateTo(peerID string) {
 	// If nextIndex > lastIndex, entries is empty and this becomes a heartbeat.
 	var entries []LogEntry
 	lastIndex := n.log.LastIndex()
-	if nextIndex < lastIndex {
+	if nextIndex <= lastIndex {
 		var err error
 		entries, err = n.log.GetEntries(nextIndex, lastIndex + 1)
 		if err != nil {

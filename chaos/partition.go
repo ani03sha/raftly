@@ -48,7 +48,7 @@ func (c *ChaosInjector) PartitionNode (nodeID string, duration time.Duration) *I
 			c.proxy.RemoveRule(fromID)
 			c.proxy.RemoveRule(toID)
 			result.EndTime = time.Now()
-			c.RecordObservation(fmt.Sprintf("HEAL: partition on node %s removed after %w", nodeID, duration))
+			c.RecordObservation(fmt.Sprintf("HEAL: partition on node %s removed after %v", nodeID, duration))
 		}()
 	}
 

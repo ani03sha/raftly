@@ -37,4 +37,4 @@ if [[ -z "$TEST" ]]; then
 fi
 
 echo "Running scenario: $NAME ($TEST)"
-go test ./tests/ -run "^${TEST}$" -v -timeout 60s
+go test ./tests/ -run "^${TEST}$" -v -timeout 60s   

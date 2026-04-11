@@ -1,3 +1,5 @@
+name: "Raftly"
+
 services:
     node1:
         build:

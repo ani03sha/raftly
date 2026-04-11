@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Processes an incoming AppendEntries RPC from the leader. This runs on followers.
@@ -83,8 +85,13 @@ func (n *RaftNode) handleAppendEntries(req AppendEntriesRequest) AppendEntriesRe
 		if existing.Term != entry.Term {
 			// Conflict: our entry at this index has a different term than the leader's.
 			// The leader's version wins — truncate our log from this index onward, then append the leader's entries.
-			// This is safe because conflicting entries were never committed (the commit rule ensures committed 
+			// This is safe because conflicting entries were never committed (the commit rule ensures committed
 			// entries are never overwritten).
+			n.logger.Warn("log conflict: truncating",
+				zap.Uint64("from_index", entry.Index),
+				zap.Uint64("local_term", existing.Term),
+				zap.Uint64("leader_term", entry.Term),
+			)
 			if err := n.wal.TruncateFrom(entry.Index); err != nil {
 				return AppendEntriesResponse{Term: n.currentTerm, Success: false}
 			}
@@ -297,6 +304,10 @@ func (n *RaftNode) maybeCommit() {
 	}
 
 	_ = n.log.CommitTo(quorumMatchIndex)
+	n.logger.Info("committed",
+		zap.Uint64("index", quorumMatchIndex),
+		zap.Uint64("term", n.currentTerm),
+	)
 	go n.applyCommitted()
 }
 

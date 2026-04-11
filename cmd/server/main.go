@@ -12,6 +12,7 @@ import (
 
 	"github.com/ani03sha/raftly/raft"
 	"github.com/ani03sha/raftly/server"
+	"go.uber.org/zap"
 )
 
 
@@ -23,6 +24,9 @@ func main() {
 	peers     := flag.String("peers", "", "Other nodes' gRPC addrs: node2=:7002,node3=:7003")
 	httpPeers := flag.String("http-peers", "", "Other nodes' HTTP addrs: node2=:8002,node3=:8003")
 	flag.Parse()
+
+	logger := zap.Must(zap.NewDevelopment())
+	defer logger.Sync()
 
 	if *nodeID == "" || *grpcAddr == "" || *httpAddr == "" {
 		fmt.Fprintln(os.Stderr, "Usage: raftly-server -id <nodeID> -grpc-addr <grpcAddr> -http-addr <httpAddr> [-data-dir <dataDir>] [-peers <peerList>] [-http-peers <httpPeerList>]")
@@ -53,21 +57,23 @@ func main() {
 
 	srv, err := server.New(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "create server: %v\n", err)
-        os.Exit(1)
+		logger.Fatal("failed to create server", zap.Error(err))
 	}
 	if err := srv.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "start server: %v\n", err)
-        os.Exit(1)
+		logger.Fatal("failed to start server", zap.Error(err))
 	}
 
-	fmt.Printf("[%s] started — gRPC=%s HTTP=%s\n", *nodeID, *grpcAddr, *httpAddr)
+	logger.Info("server ready",
+		zap.String("node", *nodeID),
+		zap.String("grpc", *grpcAddr),
+		zap.String("http", *httpAddr),
+	)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	fmt.Printf("[%s] shutting down...\n", *nodeID)
+	logger.Info("shutting down", zap.String("node", *nodeID))
 	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
 	srv.Stop(ctx)

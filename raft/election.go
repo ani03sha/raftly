@@ -3,6 +3,8 @@ package raft
 import (
 	"context"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 
@@ -133,11 +135,18 @@ func (n *RaftNode) campaign(preVote bool) {
 			// Quorum reached - we won.
 			n.mu.Lock()
 			if preVote {
-				// Pre-vote quorum means the cluster has no healthy leader.
-				// Safe to proceed with a real election now.
+				n.logger.Info("pre-vote won, escalating to election",
+					zap.Uint64("term", campaignTerm),
+					zap.Int("votes", votes),
+					zap.Int("needed", needed),
+				)
 				n.mu.Unlock()
 				n.campaign(false)
 			} else {
+				n.logger.Info("election won",
+					zap.Uint64("term", campaignTerm),
+					zap.Int("votes", votes),
+				)
 				n.becomeLeader()
 				n.mu.Unlock()
 			}
@@ -147,6 +156,11 @@ func (n *RaftNode) campaign(preVote bool) {
 	// Failed to reach quorum. Step back to follower and wait for the next timeout.
 	n.mu.Lock()
 	if n.state == Candidate || n.state == PreCandidate {
+		n.logger.Info("election lost",
+			zap.Uint64("term", n.currentTerm),
+			zap.Int("votes", votes),
+			zap.Int("needed", needed),
+		)
 		n.becomeFollower(n.currentTerm, "")
 	}
 	n.mu.Unlock()
@@ -174,6 +188,11 @@ func (n *RaftNode) handleRequestVote(req VoteRequest) VoteResponse {
 	// (It's okay if we voted for THIS candidate - idempotent retry)
 	alreadyVoted := n.votedFor != "" && n.votedFor != req.CandidateID
 	if alreadyVoted {
+		n.logger.Info("vote denied: already voted",
+			zap.String("candidate", req.CandidateID),
+			zap.String("voted_for", n.votedFor),
+			zap.Uint64("term", req.Term),
+		)
 		return VoteResponse{Term: n.currentTerm, VoteGranted: false}
 	}
 
@@ -181,6 +200,11 @@ func (n *RaftNode) handleRequestVote(req VoteRequest) VoteResponse {
 	// This is the safety rule. Without this, a node with a stale log could win,
 	// became leader, and overwrite entries that we already committed.
 	if !n.isLogUpToDate(req.LastLogTerm, req.LastLogIndex) {
+		n.logger.Info("vote denied: stale log",
+			zap.String("candidate", req.CandidateID),
+			zap.Uint64("candidate_last_index", req.LastLogIndex),
+			zap.Uint64("candidate_last_term", req.LastLogTerm),
+		)
 		return VoteResponse{Term: n.currentTerm, VoteGranted: false}
 	}
 
@@ -194,6 +218,10 @@ func (n *RaftNode) handleRequestVote(req VoteRequest) VoteResponse {
 	// Hearing from a viable candidate resets our election timer.
 	n.resetElectionTimer()
 
+	n.logger.Info("vote granted",
+		zap.String("candidate", req.CandidateID),
+		zap.Uint64("term", req.Term),
+	)
 	return VoteResponse{Term: n.currentTerm, VoteGranted: true}
 }
 

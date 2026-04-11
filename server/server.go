@@ -9,6 +9,7 @@ import (
 	"github.com/ani03sha/raftly/raft"
 	"github.com/ani03sha/raftly/transport"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 
@@ -30,11 +31,13 @@ type Server struct {
 	metrics    *Metrics
 	httpServer *http.Server
 	stopCh     chan struct{}
+	logger     *zap.Logger
 }
 
 
 // Creates a server but doesn't start anything
 func New(cfg *ServerConfig) (*Server, error) {
+	logger := zap.Must(zap.NewDevelopment()).With(zap.String("component", "server"))
 	metrics := NewMetrics()
 
 	// Build the gRPC peers map from the Raft config's peer list
@@ -70,6 +73,7 @@ func New(cfg *ServerConfig) (*Server, error) {
 			metrics:    metrics,
 			httpServer: httpServer,
 			stopCh:     make(chan struct{}),
+			logger:     logger,
 	}, nil
 }
 
@@ -95,16 +99,22 @@ func (s *Server) Start() error {
 	// 5. HTTP server — clients can now connect
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("[server] HTTP error: %v\n", err)
+			s.logger.Error("HTTP listener failed", zap.Error(err))
 		}
 	}()
 
+	s.logger.Info("started",
+		zap.String("node", s.config.Raft.NodeID),
+		zap.String("grpc", s.config.GRPCAddr),
+		zap.String("http", s.config.HttpAddr),
+	)
 	return nil
 }
 
 
 // Gracefully shuts everything down.
 func (s *Server) Stop(ctx context.Context) {
+	s.logger.Info("stopping", zap.String("node", s.config.Raft.NodeID))
 	close(s.stopCh)
 	s.httpServer.Shutdown(ctx) // stop accepting new requests
 	s.kv.Stop()                // drain apply loop

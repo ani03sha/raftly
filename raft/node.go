@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 
@@ -130,6 +132,7 @@ type RaftNode struct {
 	proposals map[uint64]chan proposeResult
 
 	mu sync.Mutex
+	logger *zap.Logger
 	stopOnce sync.Once
 }
 
@@ -137,6 +140,8 @@ type RaftNode struct {
 // Creates a new Raft node, recover any durable state from the WAL.
 // It doesn't start the background goroutine - call Start() for that
 func NewRaftNode(config *Config, transport Transport) (*RaftNode, error) {
+	logger := zap.Must(zap.NewDevelopment()).With(zap.String("node", config.NodeID))
+
 	wal, err := Open(config.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("open WAL: %w", err)
@@ -161,6 +166,14 @@ func NewRaftNode(config *Config, transport Transport) (*RaftNode, error) {
 		peers[p.ID] = &Peer{ID: p.ID}
 	}
 
+	if len(walEntries) > 0 {
+		logger.Info("WAL recovered",
+			zap.Uint64("term", term),
+			zap.String("voted_for", votedFor),
+			zap.Int("entries", len(walEntries)),
+		)
+  	}
+
 	return &RaftNode{
 		id: config.NodeID,
 		config: config,
@@ -174,6 +187,7 @@ func NewRaftNode(config *Config, transport Transport) (*RaftNode, error) {
 		commitCh: make(chan LogEntry, 256),
 		stopCh: make(chan struct{}),
 		proposals: make(map[uint64]chan proposeResult),
+		logger: logger,
 	}, nil
 }
 
@@ -305,6 +319,15 @@ func (n *RaftNode) CommitCh() <-chan LogEntry {
 
 // Steps down to follower. This is called when we see a higher term, lose an election, or on startup.
 func (n *RaftNode) becomeFollower(term uint64, leaderID string) {
+	
+	if term > n.currentTerm || n.state != Follower {
+		n.logger.Info("→ follower",
+			zap.String("from", n.state.String()),
+			zap.Uint64("term", term),
+			zap.String("leader", leaderID),
+		)
+	}
+
 	n.state = Follower
 	n.leaderID = leaderID
 
@@ -337,6 +360,8 @@ func (n *RaftNode) becomeCandidate() {
 	_ = n.wal.Sync()
 
 	n.resetElectionTimer()
+
+	n.logger.Info("→ candidate", zap.Uint64("term", n.currentTerm))
 }
 
 
@@ -362,6 +387,10 @@ func (n *RaftNode) becomeLeader() {
 	_ = n.log.Append([]LogEntry{noop})
 
 	n.electionTimer.Stop()
+	n.logger.Info("→ leader",
+		zap.Uint64("term", n.currentTerm),
+		zap.Uint64("log_index", n.log.LastIndex()),
+	)
 	go n.maybeSendHeartbeats()
 }
 

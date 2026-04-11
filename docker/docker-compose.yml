@@ -1,0 +1,94 @@
+services:
+    node1:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+        command:
+            - -id=node1
+            - -grpc-addr=:7001
+            - -http-addr=:8001
+            - -data-dir=/data/node1
+            - -peers=node2=node2:7002,node3=node3:7003
+            - -http-peers=node1=node1:8001,node2=node2:8002,node3=node3:8003
+        ports:
+            - "7001:7001"
+            - "8001:8001"
+        volumes:
+            - node1-data:/data/node1
+        networks:
+            - raftly
+
+    node2:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+        command:
+            - -id=node2
+            - -grpc-addr=:7002
+            - -http-addr=:8002
+            - -data-dir=/data/node2
+            - -peers=node1=node1:7001,node3=node3:7003
+            - -http-peers=node1=node1:8001,node2=node2:8002,node3=node3:8003
+        ports:
+            - "7002:7002"
+            - "8002:8002"
+        volumes:
+            - node2-data:/data/node2
+        networks:
+            - raftly
+
+    node3:
+        build:
+            context: ..
+            dockerfile: docker/Dockerfile
+        command:
+            - -id=node3
+            - -grpc-addr=:7003
+            - -http-addr=:8003
+            - -data-dir=/data/node3
+            - -peers=node1=node1:7001,node2=node2:7002
+            - -http-peers=node1=node1:8001,node2=node2:8002,node3=node3:8003
+        ports:
+            - "7003:7003"
+            - "8003:8003"
+        volumes:
+            - node3-data:/data/node3
+        networks:
+            - raftly
+
+    prometheus:
+        image: prom/prometheus:v2.53.0
+        command:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+        volumes:
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        ports:
+            - "9090:9090"
+        networks:
+            - raftly
+
+    grafana:
+        image: grafana/grafana:11.1.0
+        environment:
+            GF_SECURITY_ADMIN_PASSWORD: admin
+            GF_USERS_ALLOW_SIGN_UP: "false"
+        volumes:
+            - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+            - grafana-data:/var/lib/grafana
+        ports:
+            - "3000:3000"
+        networks:
+            - raftly
+        depends_on:
+            - prometheus
+
+volumes:
+    node1-data:
+    node2-data:
+    node3-data:
+    grafana-data:
+
+networks:
+    raftly:
+        driver: bridge

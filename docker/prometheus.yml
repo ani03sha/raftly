@@ -1,0 +1,16 @@
+global:
+    scrape_interval: 5s
+    evaluation_interval: 5s
+
+scrape_configs:
+    - job_name: raftly
+      static_configs:
+          - targets:
+                - node1:8001
+                - node2:8002
+                - node3:8003
+      relabel_configs:
+          - source_labels: [__address__]
+            regex: '(node\d+):\d+'
+            target_label: node
+            replacement: "$1"

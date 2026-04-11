@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -111,6 +112,18 @@ func BenchmarkSingleNodePropose(b *testing.B) {
 		b.Fatal("self-election timeout")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	b.Cleanup(cancel)
+	go func() {
+		for {
+			select {
+			case <-node.CommitCh():
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	payload := make([]byte, 64)
 	b.ResetTimer()
 
@@ -141,6 +154,21 @@ func BenchmarkThreeNodePropose(b *testing.B) {
 		b.Fatal(err)
 	}
 	leader := c.Nodes[leaderID]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	b.Cleanup(cancel)
+	for _, n := range c.Nodes {
+		n := n
+		go func() {
+			for {
+				select {
+				case <-n.CommitCh():
+				case <-ctx.Done():
+						return
+				}
+			}
+			}()
+	}
 
 	payload := make([]byte, 64)
 	b.ResetTimer()

@@ -3,9 +3,11 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ani03sha/raftly/raft"
 )
@@ -97,8 +99,9 @@ func (kv *KVStore) apply(entry raft.LogEntry) {
 
 // --- HTTP Handlers ---
 
-// Sends an HTTP 307 pointing the client to the current leader.
-func (kv *KVStore) redirectToLeader(w http.ResponseWriter, r *http.Request) {
+// Forwards the request to the current leader and streams the response back.
+// This keeps internal Docker hostnames invisible to clients.
+func (kv *KVStore) proxyToLeader(w http.ResponseWriter, r *http.Request) {
 	leaderID := kv.node.LeaderID()
 	if leaderID == "" {
 		http.Error(w, "no leader elected", http.StatusServiceUnavailable)
@@ -107,17 +110,43 @@ func (kv *KVStore) redirectToLeader(w http.ResponseWriter, r *http.Request) {
 	addr, ok := kv.httpPeers[leaderID]
 	if !ok {
 		http.Error(w, fmt.Sprintf("leader %s address unknown", leaderID), http.StatusServiceUnavailable)
-        return
+		return
 	}
-	// Preserve full path + query on redirect
-	http.Redirect(w, r, "http://" + addr + r.RequestURI, http.StatusTemporaryRedirect)
+
+	target := "http://" + addr + r.RequestURI
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
+	if err != nil {
+		http.Error(w, "proxy error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for key, vals := range r.Header {
+		for _, v := range vals {
+			proxyReq.Header.Add(key, v)
+		}
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		http.Error(w, "proxy to leader failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for key, vals := range resp.Header {
+		for _, v := range vals {
+			w.Header().Add(key, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 
 // Handles: PUT /keys/{key}   body: {"value":"..."}
 func (kv *KVStore) HandlePut(w http.ResponseWriter, r *http.Request) {
 	if !kv.node.IsLeader() {
-		kv.redirectToLeader(w, r)
+		kv.proxyToLeader(w, r)
 		return
 	}
 
@@ -138,7 +167,7 @@ func (kv *KVStore) HandlePut(w http.ResponseWriter, r *http.Request) {
 	cmd, _ := json.Marshal(Command{Op: "put", Key: key, Value: body.Value})
 	if _, _, err := kv.node.Propose(cmd); err != nil {
 		if strings.Contains(err.Error(), "not leader") {
-			kv.redirectToLeader(w, r)
+			kv.proxyToLeader(w, r)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -151,11 +180,11 @@ func (kv *KVStore) HandlePut(w http.ResponseWriter, r *http.Request) {
 // Handles: GET /keys/{key}
 func (kv *KVStore) HandleGet(w http.ResponseWriter, r *http.Request) {
 	if !kv.node.IsLeader() {
-		kv.redirectToLeader(w, r)
+		kv.proxyToLeader(w, r)
 		return
 	}
 
-	key := strings.TrimPrefix(r.URL.Path, "/keys")
+	key := strings.TrimPrefix(r.URL.Path, "/keys/")
 	if key == "" {
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
@@ -163,7 +192,7 @@ func (kv *KVStore) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 	kv.mu.RLock()
 	value, exists := kv.data[key]
-	kv.mu.Unlock()
+	kv.mu.RUnlock()
 
 	if !exists {
 		http.Error(w, "key not found", http.StatusNotFound)
@@ -178,7 +207,7 @@ func (kv *KVStore) HandleGet(w http.ResponseWriter, r *http.Request) {
 // Handles: DELETE /keys/{key}
 func (kv *KVStore) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	if !kv.node.IsLeader() {
-		kv.redirectToLeader(w, r)
+		kv.proxyToLeader(w, r)
 		return
 	}
 
@@ -191,7 +220,7 @@ func (kv *KVStore) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	cmd, _ := json.Marshal(Command{Op: "delete", Key: key})
 	if _, _, err := kv.node.Propose(cmd); err != nil {
 		if strings.Contains(err.Error(), "not leader") {
-			kv.redirectToLeader(w, r)
+			kv.proxyToLeader(w, r)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -1,0 +1,200 @@
+{
+  "title": "Raftly Cluster",
+  "uid": "raftly-cluster",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Node State (0=follower, 1=candidate, 2=leader)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Follower", "color": "blue" },
+                "1": { "text": "Candidate", "color": "yellow" },
+                "2": { "text": "Leader", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
+        { "expr": "raftly_state", "legendFormat": "{{node}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Current Term",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "raftly_current_term",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Leader Changes (total)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "sum(raftly_leader_changes_total)",
+          "legendFormat": "leader changes",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Committed Index per Node",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "raftly_committed_index",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Applied Index per Node",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "raftly_applied_index",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Log Entries Written (rate/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "rate(raftly_log_entries_total[30s])",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "WAL fsync Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "ms" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(raftly_wal_fsync_duration_ms_bucket[1m]))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(raftly_wal_fsync_duration_ms_bucket[1m]))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(raftly_wal_fsync_duration_ms_bucket[1m]))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    }
+  ]
+}

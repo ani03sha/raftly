@@ -58,4 +58,8 @@ bench:
 scenario:
 	@bash scripts/scenario.sh $(NAME)
 
+## Run all four chaos scenarios with a formatted summary
+scenarios:
+	@bash scripts/run-all-scenarios.sh
+
 Note: Makefile indentation must use tabs, not spaces.

@@ -314,6 +314,25 @@ func (n *RaftNode) CommitCh() <-chan LogEntry {
 }
 
 
+// Returns the last `limit` entries from this node's log. Used by the dashboard
+// to visualize replication progress across the cluster.
+func (n *RaftNode) LogSnapshot(limit int) []LogEntry {
+	last := n.log.LastIndex()
+	if last == 0 || limit <= 0 {
+		return nil
+	}
+	from := uint64(1)
+	if uint64(limit) < last {
+		from = last - uint64(limit) + 1
+	}
+	entries, err := n.log.GetEntries(from, last+1)
+	if err != nil {
+		return nil
+	}
+	return entries
+}
+
+
 // --- State Transitions ---
 // These are called with n.mu held.
 

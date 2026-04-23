@@ -1,0 +1,17 @@
+# Keep local node_modules out of the build context — Dockerfile installs fresh
+ui/node_modules
+ui/dist
+ui/.vite
+
+# Local runtime state
+data/
+bin/
+
+# VCS / editor
+.git
+.idea
+.vscode
+
+# Misc
+*.log
+.DS_Store

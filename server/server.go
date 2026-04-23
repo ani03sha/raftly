@@ -8,6 +8,7 @@ import (
 
 	"github.com/ani03sha/raftly/raft"
 	"github.com/ani03sha/raftly/transport"
+	"github.com/ani03sha/raftly/web"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
@@ -55,10 +56,15 @@ func New(cfg *ServerConfig) (*Server, error) {
     }
 
 	kv := NewKVStore(node, cfg.HTTPPeers, metrics)
+	chaos := NewChaosAPI(cfg.Raft.NodeID, proxy, cfg.HTTPPeers)
+	logAPI := NewLogAPI(node, cfg.HTTPPeers)
 
 	mux := http.NewServeMux()
 	kv.RegisterRoutes(mux)
+	chaos.RegisterRoutes(mux)
+	logAPI.RegisterRoutes(mux)
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/", web.Handler())
 
 	httpServer := &http.Server{
 			Addr:    cfg.HttpAddr,

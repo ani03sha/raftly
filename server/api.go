@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -260,4 +262,180 @@ func (kv *KVStore) RegisterRoutes(mux *http.ServeMux) {
 		}
 	})
 	mux.HandleFunc("/status", kv.HandleStatus)
+	mux.HandleFunc("/api/cluster", kv.HandleCluster)
+	mux.HandleFunc("/api/events", kv.HandleEvents)
+}
+
+
+// --- Cluster aggregation & SSE event stream ---
+
+type nodeView struct {
+	ID          string `json:"id"`
+	State       string `json:"state"`
+	Term        uint64 `json:"term"`
+	LeaderID    string `json:"leader_id"`
+	CommitIndex uint64 `json:"commit_index"`
+	LastApplied uint64 `json:"last_applied"`
+	Reachable   bool   `json:"reachable"`
+}
+
+
+type clusterView struct {
+	Nodes     []nodeView `json:"nodes"`
+	LeaderID  string     `json:"leader_id"`
+	Term      uint64     `json:"term"`
+	Timestamp int64      `json:"timestamp"`
+}
+
+
+// Fans out to every peer's /status endpoint in parallel. Unreachable nodes
+// are reported with Reachable=false rather than failing the whole request.
+func (kv *KVStore) fetchClusterSnapshot(ctx context.Context) clusterView {
+	ids := make([]string, 0, len(kv.httpPeers))
+	for id := range kv.httpPeers {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var mu sync.Mutex
+	views := make([]nodeView, 0, len(ids))
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		id := id
+		addr := kv.httpPeers[id]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v := fetchNodeStatus(ctx, id, addr)
+			mu.Lock()
+			views = append(views, v)
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	sort.Slice(views, func(i, j int) bool { return views[i].ID < views[j].ID })
+
+	snap := clusterView{Nodes: views, Timestamp: time.Now().UnixMilli()}
+	for _, n := range views {
+		if n.State == "Leader" {
+			snap.LeaderID = n.ID
+		}
+		if n.Term > snap.Term {
+			snap.Term = n.Term
+		}
+	}
+	return snap
+}
+
+
+func fetchNodeStatus(ctx context.Context, id, addr string) nodeView {
+	reqCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, "http://"+addr+"/status", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nodeView{ID: id, State: "Down", Reachable: false}
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		ID          string `json:"id"`
+		State       string `json:"state"`
+		Term        uint64 `json:"term"`
+		LeaderID    string `json:"leader_id"`
+		CommitIndex uint64 `json:"commit_index"`
+		LastApplied uint64 `json:"last_applied"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nodeView{ID: id, State: "Down", Reachable: false}
+	}
+	return nodeView{
+		ID:          raw.ID,
+		State:       raw.State,
+		Term:        raw.Term,
+		LeaderID:    raw.LeaderID,
+		CommitIndex: raw.CommitIndex,
+		LastApplied: raw.LastApplied,
+		Reachable:   true,
+	}
+}
+
+
+// Handles: GET /api/cluster — aggregated snapshot across all peers.
+func (kv *KVStore) HandleCluster(w http.ResponseWriter, r *http.Request) {
+	snap := kv.fetchClusterSnapshot(r.Context())
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(snap)
+}
+
+
+// Handles: GET /api/events — Server-Sent Events. Emits a "status" frame every
+// 500ms and diff events (leader_change, term_change, node_down, node_up)
+// whenever the snapshot changes.
+func (kv *KVStore) HandleEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	send := func(typ string, payload interface{}, nodeID string) {
+		evt := map[string]interface{}{
+			"type":      typ,
+			"timestamp": time.Now().UnixMilli(),
+			"data":      payload,
+		}
+		if nodeID != "" {
+			evt["node_id"] = nodeID
+		}
+		b, _ := json.Marshal(evt)
+		fmt.Fprintf(w, "data: %s\n\n", b)
+		flusher.Flush()
+	}
+
+	prev := kv.fetchClusterSnapshot(r.Context())
+	send("status", prev, "")
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			curr := kv.fetchClusterSnapshot(r.Context())
+			send("status", curr, "")
+
+			if curr.LeaderID != prev.LeaderID && curr.LeaderID != "" {
+				send("leader_change", map[string]interface{}{
+					"from": prev.LeaderID,
+					"to":   curr.LeaderID,
+				}, curr.LeaderID)
+			}
+			if curr.Term > prev.Term {
+				send("term_change", map[string]interface{}{
+					"from": prev.Term,
+					"to":   curr.Term,
+				}, "")
+			}
+			prevMap := make(map[string]nodeView, len(prev.Nodes))
+			for _, n := range prev.Nodes {
+				prevMap[n.ID] = n
+			}
+			for _, n := range curr.Nodes {
+				p, existed := prevMap[n.ID]
+				if existed && p.Reachable && !n.Reachable {
+					send("node_down", map[string]interface{}{"id": n.ID}, n.ID)
+				}
+				if existed && !p.Reachable && n.Reachable {
+					send("node_up", map[string]interface{}{"id": n.ID}, n.ID)
+				}
+			}
+			prev = curr
+		}
+	}
 }

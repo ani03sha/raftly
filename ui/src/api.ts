@@ -3,6 +3,7 @@ import type {
   ClusterEvent,
   ChaosState,
   ClusterLogView,
+  ClusterConfig,
 } from './types'
 
 export async function getCluster(): Promise<ClusterStatus> {
@@ -56,6 +57,22 @@ export async function injectLoss(node: string, lossRate: number): Promise<void> 
 
 export async function healAll(): Promise<void> {
   await postJSON('/api/cluster/chaos/heal', {})
+}
+
+export async function getClusterConfig(): Promise<ClusterConfig> {
+  const res = await fetch('/api/cluster/config')
+  if (!res.ok) throw new Error(`config fetch failed: ${res.status}`)
+  return res.json()
+}
+
+export async function applyClusterConfig(electionTimeoutMs: number, heartbeatMs: number): Promise<ClusterConfig> {
+  const res = await fetch('/api/cluster/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ election_timeout_ms: electionTimeoutMs, heartbeat_ms: heartbeatMs }),
+  })
+  if (!res.ok) throw new Error((await res.text()) || `config update failed: ${res.status}`)
+  return res.json()
 }
 
 export async function getClusterLog(limit = 20): Promise<ClusterLogView> {

@@ -70,7 +70,7 @@ export default function App() {
         </div>
 
         {/* Center — scenarios / chaos / KV (flex-1, most space) */}
-        <div className="flex-1 border-r border-slate-200 overflow-y-auto bg-white">
+        <div className="flex-1 border-r border-slate-200 overflow-hidden bg-white">
           <ControlColumn cluster={cluster} onLocalEvent={pushLocal} />
         </div>
 

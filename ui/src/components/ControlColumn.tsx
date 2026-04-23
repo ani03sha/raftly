@@ -3,13 +3,15 @@ import type { ClusterStatus, LocalEvent } from '../types'
 import ScenarioPanel from './ScenarioPanel'
 import ChaosPanel from './ChaosPanel'
 import KVPanel from './KVPanel'
+import SettingsPanel from './SettingsPanel'
 
-type Tab = 'scenarios' | 'chaos' | 'kv'
+type Tab = 'scenarios' | 'chaos' | 'kv' | 'settings'
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'scenarios', label: 'Scenarios' },
   { id: 'chaos',     label: 'Chaos'     },
   { id: 'kv',        label: 'KV ops'    },
+  { id: 'settings',  label: 'Settings'  },
 ]
 
 interface Props {
@@ -19,6 +21,7 @@ interface Props {
 
 export default function ControlColumn({ cluster, onLocalEvent }: Props) {
   const [tab, setTab] = useState<Tab>('scenarios')
+  const [healDelay, setHealDelay] = useState(4000) // ms; used by scenarios
 
   return (
     <div className="flex flex-col h-full">
@@ -38,11 +41,18 @@ export default function ControlColumn({ cluster, onLocalEvent }: Props) {
         ))}
       </div>
 
-      {/* Tab content — scrollable */}
-      <div className="flex-1 overflow-y-auto">
-        {tab === 'scenarios' && <ScenarioPanel cluster={cluster} onLocalEvent={onLocalEvent} />}
+      {/* Tab content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {tab === 'scenarios' && <ScenarioPanel cluster={cluster} healDelay={healDelay} onLocalEvent={onLocalEvent} />}
         {tab === 'chaos'     && <ChaosPanel    cluster={cluster} onLocalEvent={onLocalEvent} />}
         {tab === 'kv'        && <KVPanel leaderId={cluster?.leader_id ?? ''} onLocalEvent={onLocalEvent} />}
+        {tab === 'settings'  && (
+          <SettingsPanel
+            healDelay={healDelay}
+            onHealDelayChange={setHealDelay}
+            onLocalEvent={onLocalEvent}
+          />
+        )}
       </div>
     </div>
   )

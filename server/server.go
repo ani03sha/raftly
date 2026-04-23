@@ -58,11 +58,13 @@ func New(cfg *ServerConfig) (*Server, error) {
 	kv := NewKVStore(node, cfg.HTTPPeers, metrics)
 	chaos := NewChaosAPI(cfg.Raft.NodeID, proxy, cfg.HTTPPeers)
 	logAPI := NewLogAPI(node, cfg.HTTPPeers)
+	configAPI := NewConfigAPI(cfg.Raft.NodeID, node, cfg.HTTPPeers)
 
 	mux := http.NewServeMux()
 	kv.RegisterRoutes(mux)
 	chaos.RegisterRoutes(mux)
 	logAPI.RegisterRoutes(mux)
+	configAPI.RegisterRoutes(mux)
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.Handle("/", web.Handler())
 

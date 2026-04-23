@@ -4,6 +4,7 @@ import { healAll, injectDelay, injectLoss, isolateNode, putKey } from '../api'
 
 interface Props {
   cluster: ClusterStatus | null
+  healDelay: number  // ms before auto-heal in destructive scenarios
   onLocalEvent: (e: LocalEvent) => void
 }
 
@@ -20,6 +21,7 @@ interface RunContext {
   cluster: ClusterStatus
   log: (title: string, detail?: string) => void
   sleep: (ms: number) => Promise<void>
+  healDelay: number
 }
 
 const scenarios: Scenario[] = [
@@ -51,14 +53,14 @@ const scenarios: Scenario[] = [
       'Blackhole all traffic to/from the leader',
       'Followers stop receiving heartbeats',
       'Pre-vote + election produces new leader',
-      'Heal after 4s — old leader rejoins as follower',
+      'Auto-heal (see Settings) — old leader rejoins as follower',
     ],
-    async run({ cluster, log, sleep }) {
+    async run({ cluster, log, sleep, healDelay }) {
       const l = cluster.leader_id
       if (!l) { log('No leader found'); return }
       log(`Isolating leader ${l}`)
       await isolateNode(l)
-      await sleep(4000)
+      await sleep(healDelay)
       log('Healing', 'old leader rejoins as follower')
       await healAll()
     },
@@ -74,18 +76,18 @@ const scenarios: Scenario[] = [
       'Majority keeps committing writes',
       'Heal after 5s — node catches up via log replication',
     ],
-    async run({ cluster, log, sleep }) {
+    async run({ cluster, log, sleep, healDelay }) {
       const f = cluster.nodes.find((n) => n.id !== cluster.leader_id && n.reachable)?.id
       if (!f) { log('No follower available'); return }
       log(`Isolating follower ${f}`)
       await isolateNode(f)
-      await sleep(1200)
+      await sleep(Math.min(1200, healDelay * 0.25))
       for (let i = 1; i <= 3; i++) {
         await putKey(`majority-${i}`, `offline`)
         log(`PUT majority-${i}`, 'majority commits')
         await sleep(400)
       }
-      await sleep(2000)
+      await sleep(Math.max(500, healDelay - 2400))
       log('Healing', `${f} catches up via AppendEntries`)
       await healAll()
     },
@@ -101,7 +103,7 @@ const scenarios: Scenario[] = [
       'Commit index advances slowly via retries',
       'Heal after 6s',
     ],
-    async run({ cluster, log, sleep }) {
+    async run({ cluster, log, sleep, healDelay }) {
       const f = cluster.nodes.find((n) => n.id !== cluster.leader_id && n.reachable)?.id
       if (!f) return
       log(`40% loss on ${f}`)
@@ -111,7 +113,7 @@ const scenarios: Scenario[] = [
         log(`PUT flaky-${i}`, 'may be slow')
         await sleep(500)
       }
-      await sleep(2000)
+      await sleep(Math.max(500, healDelay - 2000))
       await healAll()
       log('Healed')
     },
@@ -127,7 +129,7 @@ const scenarios: Scenario[] = [
       'Slow follower lags but eventually catches up',
       'Heal after 5s',
     ],
-    async run({ cluster, log, sleep }) {
+    async run({ cluster, log, sleep, healDelay }) {
       const f = cluster.nodes.find((n) => n.id !== cluster.leader_id && n.reachable)?.id
       if (!f) return
       log(`300ms delay on ${f}`)
@@ -137,7 +139,7 @@ const scenarios: Scenario[] = [
         log(`PUT slow-${i}`)
         await sleep(400)
       }
-      await sleep(1500)
+      await sleep(Math.max(500, healDelay - 1600))
       await healAll()
       log('Healed', `${f} catches up`)
     },
@@ -154,7 +156,7 @@ const accentTheme: Record<Scenario['accent'], {
   purple: { tab: 'hover:text-purple-700', tabActive: 'text-purple-700 border-b-2 border-purple-500',border: 'border-purple-200', header: 'bg-purple-50 border-b border-purple-200', badge: 'bg-purple-100 text-purple-700 border-purple-300', btn: 'bg-purple-600 hover:bg-purple-700 text-white',  numBg: 'bg-purple-100 text-purple-700 border-purple-300' },
 }
 
-export default function ScenarioPanel({ cluster, onLocalEvent }: Props) {
+export default function ScenarioPanel({ cluster, healDelay, onLocalEvent }: Props) {
   const [activeTab, setActiveTab] = useState(scenarios[0].id)
   const [runningId, setRunningId] = useState<string | null>(null)
 
@@ -168,7 +170,7 @@ export default function ScenarioPanel({ cluster, onLocalEvent }: Props) {
     const push = (title: string, detail?: string) =>
       onLocalEvent({ id: `${Date.now()}-${title}`, timestamp: Date.now(), kind: 'scenario', title: `[${s.title}] ${title}`, detail })
     try {
-      await s.run({ cluster, log: push, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) })
+      await s.run({ cluster, log: push, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), healDelay })
     } catch (err) {
       push('error', err instanceof Error ? err.message : String(err))
     } finally {

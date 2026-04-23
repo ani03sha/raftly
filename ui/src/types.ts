@@ -67,6 +67,17 @@ export interface ClusterLogView {
   nodes: NodeLogView[]
 }
 
+export interface NodeConfig {
+  node: string
+  election_timeout_ms: number
+  heartbeat_ms: number
+  error?: string
+}
+
+export interface ClusterConfig {
+  nodes: NodeConfig[]
+}
+
 export interface LocalEvent {
   id: string
   timestamp: number

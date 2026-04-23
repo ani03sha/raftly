@@ -10,16 +10,16 @@ type Unified =
   | { kind: 'local';   ts: number; event: LocalEvent   }
 
 const clusterStyle: Record<string, { dot: string; label: string; text: string; bg: string; border: string }> = {
-  leader_change: { dot: 'bg-green-500',  label: 'Leader elected',  text: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200' },
-  term_change:   { dot: 'bg-amber-500',  label: 'Term advanced',   text: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  node_down:     { dot: 'bg-red-500',    label: 'Node down',       text: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'   },
-  node_up:       { dot: 'bg-blue-500',   label: 'Node recovered',  text: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200'  },
+  leader_change: { dot: 'bg-emerald-500', label: 'Leader elected',  text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  term_change:   { dot: 'bg-amber-400',   label: 'Term advanced',   text: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
+  node_down:     { dot: 'bg-rose-500',    label: 'Node down',       text: 'text-rose-700',    bg: 'bg-rose-50',    border: 'border-rose-200'    },
+  node_up:       { dot: 'bg-sky-500',     label: 'Node recovered',  text: 'text-sky-700',     bg: 'bg-sky-50',     border: 'border-sky-200'     },
 }
 
 const localStyle: Record<LocalEvent['kind'], { dot: string; label: string; text: string; bg: string; border: string }> = {
-  chaos:    { dot: 'bg-red-400',    label: 'Chaos',    text: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
-  kv:       { dot: 'bg-slate-400',  label: 'KV',       text: 'text-slate-700',  bg: 'bg-slate-50',  border: 'border-slate-200'  },
-  scenario: { dot: 'bg-purple-400', label: 'Scenario', text: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+  chaos:    { dot: 'bg-rose-400',    label: 'Chaos',    text: 'text-rose-700',    bg: 'bg-rose-50',    border: 'border-rose-200'    },
+  kv:       { dot: 'bg-slate-400',   label: 'KV',       text: 'text-slate-600',   bg: 'bg-slate-50',   border: 'border-slate-200'   },
+  scenario: { dot: 'bg-violet-400',  label: 'Scenario', text: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200'  },
 }
 
 export default function EventFeed({ events, localEvents }: Props) {

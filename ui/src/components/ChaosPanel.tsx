@@ -58,13 +58,13 @@ export default function ChaosPanel({ cluster, onLocalEvent }: Props) {
       <div className="flex-none flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
         <span className="text-xs text-slate-500">
           {activeRules > 0
-            ? <span className="font-semibold text-red-600">{activeRules} active rule{activeRules !== 1 ? 's' : ''}</span>
+            ? <span className="font-semibold text-rose-600">{activeRules} active rule{activeRules !== 1 ? 's' : ''}</span>
             : <span className="text-green-600 font-medium">No chaos active</span>}
         </span>
         <button
           disabled={!canAct}
           onClick={() => act('Heal all', 'all rules cleared', healAll)}
-          className="text-xs px-3 py-1.5 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="text-xs px-3 py-1.5 rounded-md bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           Heal all
         </button>
@@ -77,7 +77,7 @@ export default function ChaosPanel({ cluster, onLocalEvent }: Props) {
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2 text-[11px] font-semibold tracking-wide uppercase transition-colors
-              ${tab === t ? 'text-slate-900 border-b-2 border-slate-800 bg-white' : 'text-slate-400 hover:text-slate-700'}`}
+              ${tab === t ? 'text-rose-700 border-b-2 border-rose-500 bg-white' : 'text-slate-400 hover:text-slate-600'}`}
           >
             {t}
           </button>
@@ -139,13 +139,13 @@ export default function ChaosPanel({ cluster, onLocalEvent }: Props) {
 
       {/* Active rules */}
       {state && activeRules > 0 && (
-        <div className="flex-none border-t border-slate-200 px-4 py-3 bg-red-50">
-          <div className="text-[10px] uppercase tracking-widest text-red-400 font-semibold mb-1.5">Active chaos</div>
+        <div className="flex-none border-t border-rose-100 px-4 py-3 bg-rose-50/60">
+          <div className="text-[10px] uppercase tracking-widest text-rose-400 font-semibold mb-1.5">Active chaos</div>
           <div className="space-y-1">
             {state.peers.map((p) => p.rules?.length > 0 && (
               <div key={p.node} className="flex items-start gap-2 text-[11px] font-mono">
                 <span className="text-slate-500 w-14 flex-none">{p.node}</span>
-                <span className="text-red-700">{p.rules.map(ruleLabel).join(' · ')}</span>
+                <span className="text-rose-700">{p.rules.map(ruleLabel).join(' · ')}</span>
               </div>
             ))}
           </div>
@@ -197,7 +197,7 @@ function Hint({ children }: { children: React.ReactNode }) {
 function RunBtn({ onClick, disabled, busy, children }: { onClick: () => void; disabled?: boolean; busy?: boolean; children: React.ReactNode }) {
   return (
     <button disabled={disabled || busy} onClick={onClick}
-      className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+      className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
       {busy ? <span className="flex items-center justify-center gap-2"><span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent spin" />…</span> : children}
     </button>
   )

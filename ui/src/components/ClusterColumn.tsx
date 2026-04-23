@@ -30,10 +30,10 @@ export default function ClusterColumn({ cluster }: { cluster: ClusterStatus | nu
                                              'critical'
 
   const healthCls =
-    health === 'healthy'     ? 'bg-green-100 text-green-700 border-green-300' :
-    health === 'partitioned' ? 'bg-red-100 text-red-700 border-red-300' :
-    health === 'degraded'    ? 'bg-amber-100 text-amber-700 border-amber-300' :
-    health === 'critical'    ? 'bg-red-100 text-red-700 border-red-300' :
+    health === 'healthy'     ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+    health === 'partitioned' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+    health === 'degraded'    ? 'bg-amber-50 text-amber-700 border-amber-200' :
+    health === 'critical'    ? 'bg-rose-50 text-rose-700 border-rose-200' :
                                'bg-slate-100 text-slate-500 border-slate-200'
 
   return (
@@ -41,7 +41,7 @@ export default function ClusterColumn({ cluster }: { cluster: ClusterStatus | nu
       {/* Stats strip */}
       <div className="flex-none flex items-center gap-2 px-3 py-2 bg-white border-b border-slate-200 flex-wrap">
         <Pill label="health" value={health.toUpperCase()} className={healthCls} />
-        <Pill label="leader" value={leader || '—'} className="bg-green-50 text-green-800 border-green-200" />
+        <Pill label="leader" value={leader || '—'} className="bg-emerald-50 text-emerald-800 border-emerald-200" />
         <Pill label="term"   value={String(term)}   className="bg-slate-100 text-slate-600 border-slate-200" />
         <Pill label="nodes"  value={`${reachable}/${nodes.length}`} className="bg-slate-100 text-slate-600 border-slate-200" />
       </div>
@@ -116,12 +116,12 @@ function isPartitioned(nodeId: string, chaos: ChaosState | null): boolean {
 }
 
 function nodeCircleColor(n: NodeStatus, chaos: ChaosState | null): string {
-  if (!n.reachable || isPartitioned(n.id, chaos)) return '#dc2626' // red
+  if (!n.reachable || isPartitioned(n.id, chaos)) return '#e11d48' // rose-600
   switch (n.state) {
-    case 'Leader':                     return '#16a34a' // green-600
-    case 'Follower':                   return '#2563eb' // blue-600
+    case 'Leader':                         return '#059669' // emerald-600
+    case 'Follower':                       return '#0284c7' // sky-600
     case 'Candidate': case 'PreCandidate': return '#d97706' // amber-600
-    default:                           return '#dc2626'
+    default:                               return '#e11d48' // rose-600
   }
 }
 
@@ -162,13 +162,13 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
           let stroke = '#cbd5e1', sw = 1.5, animate = false, label: string | null = null
 
           if (!dropped && delayMs === 0 && lossRate === 0 && bothUp) {
-            stroke = isLeaderEdge ? '#16a34a' : '#93c5fd'
+            stroke = isLeaderEdge ? '#059669' : '#7dd3fc'
             sw = isLeaderEdge ? 2.5 : 1.5
             animate = isLeaderEdge
           }
           if (delayMs  > 0) { stroke = '#9333ea'; sw = 2; animate = true;  label = `${delayMs}ms` }
           if (lossRate > 0) { stroke = '#d97706'; sw = 2; animate = true;  label = `${Math.round(lossRate * 100)}%` }
-          if (dropped)      { stroke = '#dc2626'; sw = 2; animate = false }
+          if (dropped)      { stroke = '#e11d48'; sw = 2; animate = false }
 
           return (
             <g key={`${from}-${to}`}>
@@ -180,8 +180,8 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
               />
               {dropped && (
                 <g transform={`translate(${midX},${midY})`}>
-                  <circle r="9" fill="white" stroke="#dc2626" strokeWidth="1.5" />
-                  <path d="M-3.5-3.5L3.5 3.5M-3.5 3.5L3.5-3.5" stroke="#dc2626" strokeWidth="1.8" strokeLinecap="round" />
+                  <circle r="9" fill="white" stroke="#e11d48" strokeWidth="1.5" />
+                  <path d="M-3.5-3.5L3.5 3.5M-3.5 3.5L3.5-3.5" stroke="#e11d48" strokeWidth="1.8" strokeLinecap="round" />
                 </g>
               )}
               {label && !dropped && (
@@ -236,12 +236,12 @@ function NodeCard({ node, isLeader, chaos }: { node: NodeStatus; isLeader: boole
   const effective   = !node.reachable ? 'Down' : partitioned ? 'Partitioned' : node.state
 
   const theme =
-    effective === 'Partitioned' ? { border: 'border-red-300',   bg: 'bg-red-50',    text: 'text-red-600',    dot: 'bg-red-500'    } :
-    effective === 'Down'        ? { border: 'border-red-200',   bg: 'bg-red-50',    text: 'text-red-500',    dot: 'bg-red-400'    } :
-    effective === 'Leader'      ? { border: 'border-green-300', bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500'  } :
-    effective === 'Follower'    ? { border: 'border-blue-200',  bg: 'bg-blue-50',   text: 'text-blue-600',   dot: 'bg-blue-500'   } :
-    effective === 'Candidate'   ? { border: 'border-amber-300', bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500'  } :
-                                  { border: 'border-slate-200', bg: 'bg-slate-50',  text: 'text-slate-500',  dot: 'bg-slate-400'  }
+    effective === 'Partitioned' ? { border: 'border-rose-200',    bg: 'bg-rose-50',    text: 'text-rose-600',    dot: 'bg-rose-400'    } :
+    effective === 'Down'        ? { border: 'border-rose-200',    bg: 'bg-rose-50',    text: 'text-rose-500',    dot: 'bg-rose-300'    } :
+    effective === 'Leader'      ? { border: 'border-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' } :
+    effective === 'Follower'    ? { border: 'border-sky-200',     bg: 'bg-sky-50',     text: 'text-sky-600',     dot: 'bg-sky-400'     } :
+    effective === 'Candidate'   ? { border: 'border-amber-200',   bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-400'   } :
+                                  { border: 'border-slate-200',   bg: 'bg-slate-50',   text: 'text-slate-500',   dot: 'bg-slate-300'   }
 
   return (
     <div className={`rounded-lg border ${theme.border} ${theme.bg} p-2`}>

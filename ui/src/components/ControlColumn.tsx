@@ -35,8 +35,8 @@ export default function ControlColumn({ cluster, onLocalEvent }: Props) {
             onClick={() => setTab(t.id)}
             className={`flex-1 py-3 text-xs font-semibold tracking-wide transition-colors
               ${tab === t.id
-                ? 'text-slate-900 border-b-2 border-slate-900 bg-white'
-                : 'text-slate-400 hover:text-slate-700'}`}
+                ? 'text-indigo-700 border-b-2 border-indigo-500 bg-white'
+                : 'text-slate-400 hover:text-slate-600'}`}
           >
             {t.label}
           </button>
@@ -54,7 +54,7 @@ export default function ControlColumn({ cluster, onLocalEvent }: Props) {
           </div>
 
           {/* Explainer — bottom portion */}
-          <div className="flex-[3] min-h-0 border-t border-slate-200 overflow-y-auto bg-slate-50">
+          <div className="flex-[3] min-h-0 border-t border-slate-100 overflow-y-auto bg-slate-50/60">
             <TabExplainer tab={tab} />
           </div>
         </div>

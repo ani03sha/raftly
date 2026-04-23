@@ -98,9 +98,9 @@ function OpBtn({ color, disabled, onClick, children }: {
   color: 'green' | 'blue' | 'red'; disabled?: boolean; onClick: () => void; children: React.ReactNode
 }) {
   const cls = {
-    green: 'bg-green-600 hover:bg-green-700 text-white',
-    blue:  'bg-blue-600  hover:bg-blue-700  text-white',
-    red:   'bg-red-600   hover:bg-red-700   text-white',
+    green: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+    blue:  'bg-sky-600     hover:bg-sky-700     text-white',
+    red:   'bg-rose-600    hover:bg-rose-700    text-white',
   }[color]
   return (
     <button disabled={disabled} onClick={onClick}

@@ -14,17 +14,17 @@ html, body, #root {
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #f1f5f9;
+  background: #cfd8f0;
   color: #0f172a;
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Leader pulse — green in light mode */
+/* Leader pulse — emerald */
 @keyframes leader-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-  70%  { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(5, 150, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
 }
 .leader-pulse { animation: leader-pulse 2s infinite; }
 

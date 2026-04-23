@@ -108,7 +108,7 @@ export default function SettingsPanel({ healDelay, onHealDelayChange, onLocalEve
               onClick={apply}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition shadow-sm
                 disabled:opacity-40 disabled:cursor-not-allowed
-                ${applied ? 'bg-green-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}
+                ${applied ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
             >
               {busy ? 'Applying…' : applied ? 'Applied ✓' : 'Apply to all nodes'}
             </button>
@@ -185,7 +185,7 @@ function SliderField({ label, value, onChange, min, max, step, unit, hint, hintC
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
-        className="w-full accent-slate-700"
+        className="w-full accent-indigo-600"
       />
       <div className="flex justify-between mt-0.5">
         <span className={`text-[10px] ${hintColor}`}>{hint}</span>

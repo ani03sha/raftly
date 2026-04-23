@@ -1,4 +1,4 @@
-export type NodeState = 'Leader' | 'Follower' | 'Candidate' | 'Down'
+export type NodeState = 'Leader' | 'Follower' | 'Candidate' | 'PreCandidate' | 'Down' | 'Unknown'
 
 export interface NodeStatus {
   id: string

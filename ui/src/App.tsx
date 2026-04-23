@@ -64,16 +64,18 @@ export default function App() {
 
       {/* ── Three-column body ── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left — cluster state */}
-        <ClusterColumn cluster={cluster} />
+        {/* Left — cluster state (fixed, compact) */}
+        <div className="w-[360px] flex-none border-r border-slate-200 overflow-y-auto bg-slate-50">
+          <ClusterColumn cluster={cluster} />
+        </div>
 
-        {/* Center — scenarios / chaos / KV */}
-        <div className="w-[380px] flex-none border-x border-slate-200 overflow-y-auto bg-white">
+        {/* Center — scenarios / chaos / KV (flex-1, most space) */}
+        <div className="flex-1 border-r border-slate-200 overflow-y-auto bg-white">
           <ControlColumn cluster={cluster} onLocalEvent={pushLocal} />
         </div>
 
-        {/* Right — event timeline */}
-        <div className="w-[280px] flex-none overflow-y-auto bg-white">
+        {/* Right — event timeline (fixed) */}
+        <div className="w-[260px] flex-none overflow-y-auto bg-white">
           <EventFeed events={events} localEvents={localEvents} />
         </div>
       </div>

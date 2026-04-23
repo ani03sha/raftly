@@ -62,7 +62,7 @@ export default function ChaosPanel({ cluster, onLocalEvent }: Props) {
             : <span className="text-green-600 font-medium">No chaos active</span>}
         </span>
         <button
-          disabled={!canAct || activeRules === 0}
+          disabled={!canAct}
           onClick={() => act('Heal all', 'all rules cleared', healAll)}
           className="text-xs px-3 py-1.5 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >

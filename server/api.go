@@ -290,7 +290,12 @@ type clusterView struct {
 
 // Fans out to every peer's /status endpoint in parallel. Unreachable nodes
 // are reported with Reachable=false rather than failing the whole request.
+// Self is read directly from the node to avoid a loopback HTTP call that
+// can fail transiently and make the node appear down in its own snapshot.
 func (kv *KVStore) fetchClusterSnapshot(ctx context.Context) clusterView {
+	localStatus := kv.node.Status()
+	myID := localStatus.ID
+
 	ids := make([]string, 0, len(kv.httpPeers))
 	for id := range kv.httpPeers {
 		ids = append(ids, id)
@@ -306,7 +311,20 @@ func (kv *KVStore) fetchClusterSnapshot(ctx context.Context) clusterView {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			v := fetchNodeStatus(ctx, id, addr)
+			var v nodeView
+			if id == myID {
+				v = nodeView{
+					ID:          localStatus.ID,
+					State:       localStatus.State.String(),
+					Term:        localStatus.Term,
+					LeaderID:    localStatus.LeaderID,
+					CommitIndex: localStatus.CommitIndex,
+					LastApplied: localStatus.LastApplied,
+					Reachable:   true,
+				}
+			} else {
+				v = fetchNodeStatus(ctx, id, addr)
+			}
 			mu.Lock()
 			views = append(views, v)
 			mu.Unlock()

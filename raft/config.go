@@ -15,15 +15,15 @@ const (
 func (s NodeState) String() string {
 	switch s {
 	case Follower:
-		return "follower"
+		return "Follower"
 	case Candidate:
-		return "candidate"
+		return "Candidate"
 	case PreCandidate:
-		return "pre-candidate"
+		return "PreCandidate"
 	case Leader:
-		return "leader"
+		return "Leader"
 	default:
-		return "unknown"
+		return "Unknown"
 	}
 }
 

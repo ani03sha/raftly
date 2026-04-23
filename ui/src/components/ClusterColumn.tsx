@@ -11,7 +11,7 @@ export default function ClusterColumn({ cluster }: { cluster: ClusterStatus | nu
     const loadChaos = () => getChaosState().then(setChaos).catch(() => {})
     const loadLog = () => getClusterLog(10).then(setLog).catch(() => {})
     loadChaos(); loadLog()
-    const ic = setInterval(loadChaos, 1500)
+    const ic = setInterval(loadChaos, 1000)
     const il = setInterval(loadLog, 1000)
     return () => { clearInterval(ic); clearInterval(il) }
   }, [])
@@ -20,88 +20,115 @@ export default function ClusterColumn({ cluster }: { cluster: ClusterStatus | nu
   const leader = cluster?.leader_id ?? ''
   const term = cluster?.term ?? 0
   const reachable = nodes.filter((n) => n.reachable).length
-  const health = !cluster ? 'unknown'
-    : reachable === nodes.length && !!leader ? 'healthy'
-    : reachable > nodes.length / 2 ? 'degraded'
-    : 'critical'
+  const anyPartitioned = chaos?.peers.some((p) => p.rules?.some((r) => r.action === 'drop')) ?? false
 
-  const healthColor = health === 'healthy' ? 'bg-green-100 text-green-700 border-green-300'
-    : health === 'degraded' ? 'bg-amber-100 text-amber-700 border-amber-300'
-    : 'bg-red-100 text-red-700 border-red-300'
+  const health =
+    !cluster         ? 'unknown' :
+    anyPartitioned   ? 'partitioned' :
+    reachable === nodes.length && !!leader ? 'healthy' :
+    reachable > nodes.length / 2           ? 'degraded' :
+                                             'critical'
+
+  const healthCls =
+    health === 'healthy'     ? 'bg-green-100 text-green-700 border-green-300' :
+    health === 'partitioned' ? 'bg-red-100 text-red-700 border-red-300' :
+    health === 'degraded'    ? 'bg-amber-100 text-amber-700 border-amber-300' :
+    health === 'critical'    ? 'bg-red-100 text-red-700 border-red-300' :
+                               'bg-slate-100 text-slate-500 border-slate-200'
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
+    <div className="flex flex-col h-full">
       {/* Stats strip */}
-      <div className="flex-none flex items-center gap-3 px-4 py-2.5 bg-white border-b border-slate-200 flex-wrap">
-        <Pill label="health" value={health.toUpperCase()} className={healthColor} />
+      <div className="flex-none flex items-center gap-2 px-3 py-2 bg-white border-b border-slate-200 flex-wrap">
+        <Pill label="health" value={health.toUpperCase()} className={healthCls} />
         <Pill label="leader" value={leader || '—'} className="bg-green-50 text-green-800 border-green-200" />
-        <Pill label="term" value={String(term)} className="bg-slate-100 text-slate-700 border-slate-200" />
-        <Pill label="nodes" value={`${reachable}/${nodes.length} up`} className="bg-slate-100 text-slate-700 border-slate-200" />
+        <Pill label="term"   value={String(term)}   className="bg-slate-100 text-slate-600 border-slate-200" />
+        <Pill label="nodes"  value={`${reachable}/${nodes.length}`} className="bg-slate-100 text-slate-600 border-slate-200" />
       </div>
 
       {/* Topology */}
-      <div className="flex-none p-4">
-        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-2">Topology</div>
+      <div className="flex-none px-3 pt-3 pb-2">
+        <SectionLabel>Topology</SectionLabel>
         <Topology nodes={nodes} leaderId={leader} chaos={chaos} />
       </div>
 
       {/* Node cards */}
-      <div className="flex-none px-4 pb-4">
-        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-2">Nodes</div>
-        <div className="grid grid-cols-3 gap-2">
-          {nodes.map((n) => <NodeCard key={n.id} node={n} isLeader={n.id === leader} chaos={chaos} />)}
+      <div className="flex-none px-3 pb-3">
+        <SectionLabel>Nodes</SectionLabel>
+        <div className="grid grid-cols-3 gap-1.5">
+          {nodes.map((n) => (
+            <NodeCard key={n.id} node={n} isLeader={n.id === leader} chaos={chaos} />
+          ))}
         </div>
       </div>
 
       {/* Replication log */}
-      <div className="flex-1 px-4 pb-4 min-h-0">
-        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-2">
-          Replication log
-        </div>
+      <div className="flex-1 min-h-0 px-3 pb-3">
+        <SectionLabel>Replication log</SectionLabel>
         <LogTable log={log} />
       </div>
     </div>
   )
 }
 
-function Pill({ label, value, className }: { label: string; value: string; className: string }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${className}`}>
-      <span className="opacity-60">{label}</span>
-      <span className="font-semibold">{value}</span>
+    <div className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-1.5">
+      {children}
     </div>
   )
 }
 
-// ── Topology SVG ─────────────────────────────────────────────
+function Pill({ label, value, className }: { label: string; value: string; className: string }) {
+  return (
+    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${className}`}>
+      <span className="opacity-60">{label}</span>
+      <span className="font-bold">{value}</span>
+    </div>
+  )
+}
+
+// ── Topology SVG ──────────────────────────────────────────────
 
 interface EdgeState { drop: boolean; delayMs?: number; lossRate?: number }
 
 function buildEdgeMap(chaos: ChaosState | null, nodeIds: string[]): Map<string, EdgeState> {
-  const edges = new Map<string, EdgeState>()
-  if (!chaos) return edges
-  const ensure = (k: string): EdgeState => {
-    if (!edges.has(k)) edges.set(k, { drop: false })
-    return edges.get(k)!
-  }
+  const m = new Map<string, EdgeState>()
+  if (!chaos) return m
+  const get = (k: string): EdgeState => { if (!m.has(k)) m.set(k, { drop: false }); return m.get(k)! }
   for (const peer of chaos.peers) {
     for (const rule of peer.rules ?? []) {
       const targets = rule.to_node ? [rule.to_node] : nodeIds.filter((n) => n !== peer.node)
       for (const to of targets) {
-        const e = ensure(`${peer.node}->${to}`)
-        if (rule.action === 'drop') e.drop = true
-        if (rule.action === 'delay') e.delayMs = Math.max(e.delayMs ?? 0, Number(rule.params?.delay_ms ?? 0))
-        if (rule.action === 'loss') e.lossRate = Math.max(e.lossRate ?? 0, Number(rule.params?.loss_rate ?? 0))
+        const e = get(`${peer.node}->${to}`)
+        if (rule.action === 'drop')  e.drop     = true
+        if (rule.action === 'delay') e.delayMs  = Math.max(e.delayMs  ?? 0, Number(rule.params?.delay_ms  ?? 0))
+        if (rule.action === 'loss')  e.lossRate = Math.max(e.lossRate ?? 0, Number(rule.params?.loss_rate ?? 0))
       }
     }
   }
-  return edges
+  return m
+}
+
+// Returns whether a node is partitioned (has any drop rule on its outbound)
+function isPartitioned(nodeId: string, chaos: ChaosState | null): boolean {
+  return chaos?.peers.some((p) => p.node === nodeId && p.rules?.some((r) => r.action === 'drop')) ?? false
+}
+
+function nodeCircleColor(n: NodeStatus, chaos: ChaosState | null): string {
+  if (!n.reachable || isPartitioned(n.id, chaos)) return '#dc2626' // red
+  switch (n.state) {
+    case 'Leader':                     return '#16a34a' // green-600
+    case 'Follower':                   return '#2563eb' // blue-600
+    case 'Candidate': case 'PreCandidate': return '#d97706' // amber-600
+    default:                           return '#dc2626'
+  }
 }
 
 function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: string; chaos: ChaosState | null }) {
-  const W = 480, H = 200
+  const W = 340, H = 190
   const cx = W / 2, cy = H / 2
-  const r = Math.min(W, H) * 0.33
+  const r = Math.min(W, H) * 0.34
 
   const positions = nodes.map((node, i) => {
     const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1) - Math.PI / 2
@@ -116,14 +143,8 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
       pairs.push({ from: nodes[i].id, to: nodes[j].id })
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px]">
-        <defs>
-          <filter id="glow-light">
-            <feGaussianBlur stdDeviation="5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[190px]">
 
         {pairs.map(({ from, to }) => {
           const a = posById.get(from)!
@@ -131,24 +152,23 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
           if (!a || !b) return null
           const ab = edgeMap.get(`${from}->${to}`)
           const ba = edgeMap.get(`${to}->${from}`)
-          const dropped = !!ab?.drop || !!ba?.drop
-          const delayMs = Math.max(ab?.delayMs ?? 0, ba?.delayMs ?? 0)
+          const dropped  = !!ab?.drop || !!ba?.drop
+          const delayMs  = Math.max(ab?.delayMs  ?? 0, ba?.delayMs  ?? 0)
           const lossRate = Math.max(ab?.lossRate ?? 0, ba?.lossRate ?? 0)
-          const aR = nodes.find((n) => n.id === from)?.reachable
-          const bR = nodes.find((n) => n.id === to)?.reachable
           const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2
-
-          let stroke = '#e2e8f0', sw = 1.5, animate = false, label: string | null = null
           const isLeaderEdge = from === leaderId || to === leaderId
+          const bothUp = a.node.reachable && b.node.reachable
 
-          if (!dropped && delayMs === 0 && lossRate === 0 && aR && bR) {
-            stroke = isLeaderEdge ? '#16a34a' : '#94a3b8'
-            sw = isLeaderEdge ? 2 : 1.5
+          let stroke = '#cbd5e1', sw = 1.5, animate = false, label: string | null = null
+
+          if (!dropped && delayMs === 0 && lossRate === 0 && bothUp) {
+            stroke = isLeaderEdge ? '#16a34a' : '#93c5fd'
+            sw = isLeaderEdge ? 2.5 : 1.5
             animate = isLeaderEdge
           }
-          if (delayMs > 0) { stroke = '#9333ea'; sw = 2; animate = true; label = `${delayMs}ms` }
-          if (lossRate > 0) { stroke = '#d97706'; sw = 2; animate = true; label = `${Math.round(lossRate * 100)}%` }
-          if (dropped) { stroke = '#dc2626'; sw = 2; animate = false }
+          if (delayMs  > 0) { stroke = '#9333ea'; sw = 2; animate = true;  label = `${delayMs}ms` }
+          if (lossRate > 0) { stroke = '#d97706'; sw = 2; animate = true;  label = `${Math.round(lossRate * 100)}%` }
+          if (dropped)      { stroke = '#dc2626'; sw = 2; animate = false }
 
           return (
             <g key={`${from}-${to}`}>
@@ -156,17 +176,18 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
                 stroke={stroke} strokeWidth={sw}
                 strokeDasharray={dropped ? '5 5' : undefined}
                 className={animate ? 'edge-animate' : ''}
+                opacity={bothUp ? 1 : 0.3}
               />
               {dropped && (
                 <g transform={`translate(${midX},${midY})`}>
-                  <circle r="10" fill="white" stroke="#dc2626" strokeWidth="1.5" />
-                  <path d="M-4-4L4 4M-4 4L4-4" stroke="#dc2626" strokeWidth="1.8" strokeLinecap="round" />
+                  <circle r="9" fill="white" stroke="#dc2626" strokeWidth="1.5" />
+                  <path d="M-3.5-3.5L3.5 3.5M-3.5 3.5L3.5-3.5" stroke="#dc2626" strokeWidth="1.8" strokeLinecap="round" />
                 </g>
               )}
               {label && !dropped && (
-                <g transform={`translate(${midX},${midY - 8})`}>
-                  <rect x="-22" y="-8" width="44" height="16" rx="8" fill="white" stroke={stroke} strokeWidth="1" />
-                  <text textAnchor="middle" dy="3.5" fontSize="9" fill={stroke} fontFamily="monospace">{label}</text>
+                <g transform={`translate(${midX},${midY - 7})`}>
+                  <rect x="-20" y="-7" width="40" height="14" rx="7" fill="white" stroke={stroke} strokeWidth="1" />
+                  <text textAnchor="middle" dy="3" fontSize="8" fill={stroke} fontFamily="monospace">{label}</text>
                 </g>
               )}
             </g>
@@ -174,22 +195,31 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
         })}
 
         {positions.map((p) => {
-          const color = nodeColor(p.node)
+          const color = nodeCircleColor(p.node, chaos)
           const isLeader = p.node.id === leaderId
+          const partitioned = isPartitioned(p.node.id, chaos)
+          const label = partitioned ? '!' : p.node.reachable ? p.node.state[0] : '✕'
+
           return (
             <g key={p.node.id} transform={`translate(${p.x},${p.y})`}>
-              {isLeader && <circle r="26" fill={color} opacity="0.15" />}
-              <circle r="18" fill={color} />
-              <circle r="18" fill="white" opacity="0.25" />
-              {/* State letter */}
-              <text textAnchor="middle" dy="4" fontSize="11" fill="white" fontWeight="700" fontFamily="monospace">
-                {p.node.reachable ? p.node.state[0] : '✕'}
+              {/* Outer glow for leader */}
+              {isLeader && <circle r="24" fill={color} opacity="0.18" />}
+              {/* Main circle — solid color, no white wash */}
+              <circle r="17" fill={color} />
+              {/* State letter — white text, bold */}
+              <text textAnchor="middle" dy="4.5" fontSize="12" fill="white" fontWeight="800"
+                fontFamily="system-ui, sans-serif" style={{ userSelect: 'none' }}>
+                {label}
               </text>
-              <text textAnchor="middle" dy="-24" fontSize="10" fill="#374151" fontFamily="monospace">
+              {/* Node ID above */}
+              <text textAnchor="middle" dy="-23" fontSize="10" fill="#374151" fontWeight="600"
+                fontFamily="monospace">
                 {p.node.id}
               </text>
-              <text textAnchor="middle" dy="32" fontSize="9" fill={color} fontFamily="monospace">
-                {p.node.reachable ? p.node.state.toLowerCase() : 'down'}
+              {/* State label below */}
+              <text textAnchor="middle" dy="33" fontSize="9" fill={color} fontWeight="600"
+                fontFamily="monospace">
+                {partitioned ? 'partitioned' : p.node.reachable ? p.node.state.toLowerCase() : 'down'}
               </text>
             </g>
           )
@@ -202,109 +232,84 @@ function Topology({ nodes, leaderId, chaos }: { nodes: NodeStatus[]; leaderId: s
 // ── Node card ─────────────────────────────────────────────────
 
 function NodeCard({ node, isLeader, chaos }: { node: NodeStatus; isLeader: boolean; chaos: ChaosState | null }) {
-  const partitioned = chaos?.peers.some(
-    (p) => p.node === node.id && p.rules?.some((r) => r.action === 'drop')
-  ) ?? false
+  const partitioned = isPartitioned(node.id, chaos)
+  const effective   = !node.reachable ? 'Down' : partitioned ? 'Partitioned' : node.state
 
-  const effective = node.reachable ? node.state : 'Down'
-  const { border, bg, text, dot } = stateTheme(effective, partitioned)
+  const theme =
+    effective === 'Partitioned' ? { border: 'border-red-300',   bg: 'bg-red-50',    text: 'text-red-600',    dot: 'bg-red-500'    } :
+    effective === 'Down'        ? { border: 'border-red-200',   bg: 'bg-red-50',    text: 'text-red-500',    dot: 'bg-red-400'    } :
+    effective === 'Leader'      ? { border: 'border-green-300', bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500'  } :
+    effective === 'Follower'    ? { border: 'border-blue-200',  bg: 'bg-blue-50',   text: 'text-blue-600',   dot: 'bg-blue-500'   } :
+    effective === 'Candidate'   ? { border: 'border-amber-300', bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500'  } :
+                                  { border: 'border-slate-200', bg: 'bg-slate-50',  text: 'text-slate-500',  dot: 'bg-slate-400'  }
 
   return (
-    <div className={`rounded-lg border ${border} ${bg} p-2.5`}>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-xs font-semibold text-slate-800">{node.id}</span>
-        <span className={`w-2 h-2 rounded-full ${dot} ${isLeader ? 'leader-pulse' : ''}`} />
+    <div className={`rounded-lg border ${theme.border} ${theme.bg} p-2`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-mono text-[11px] font-bold text-slate-800">{node.id}</span>
+        <span className={`w-2 h-2 rounded-full flex-none ${theme.dot} ${isLeader ? 'leader-pulse' : ''}`} />
       </div>
-      <div className={`text-[10px] font-bold uppercase tracking-wider ${text} mb-1.5`}>
-        {partitioned ? 'partitioned' : effective}
+      <div className={`text-[10px] font-bold uppercase tracking-wider ${theme.text} mb-1.5`}>
+        {effective}
       </div>
-      <div className="space-y-0.5 font-mono text-[10px]">
-        <div className="flex justify-between text-slate-500">
-          <span>term</span><span className="text-slate-700">{node.term}</span>
-        </div>
-        <div className="flex justify-between text-slate-500">
-          <span>commit</span><span className="text-slate-700">{node.commit_index}</span>
-        </div>
+      <div className="space-y-0.5 font-mono text-[10px] text-slate-500">
+        <div className="flex justify-between"><span>term</span><span className="text-slate-700">{node.term}</span></div>
+        <div className="flex justify-between"><span>commit</span><span className="text-slate-700">{node.commit_index}</span></div>
       </div>
     </div>
   )
 }
 
-function stateTheme(state: string, partitioned: boolean) {
-  if (partitioned) return {
-    border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500',
-  }
-  switch (state) {
-    case 'Leader':    return { border: 'border-green-300', bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' }
-    case 'Follower':  return { border: 'border-blue-200',  bg: 'bg-blue-50',  text: 'text-blue-600',  dot: 'bg-blue-500' }
-    case 'Candidate': return { border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' }
-    default:          return { border: 'border-red-200',   bg: 'bg-red-50',   text: 'text-red-600',   dot: 'bg-red-400' }
-  }
-}
-
-function nodeColor(n: NodeStatus): string {
-  if (!n.reachable) return '#ef4444'
-  switch (n.state) {
-    case 'Leader':    return '#16a34a'
-    case 'Follower':  return '#2563eb'
-    case 'Candidate': return '#d97706'
-    default:          return '#94a3b8'
-  }
-}
-
 // ── Log table ─────────────────────────────────────────────────
 
 function LogTable({ log }: { log: ClusterLogView | null }) {
-  if (!log) return <div className="text-xs text-slate-400 py-4 text-center">Loading log…</div>
+  if (!log) return <div className="text-[11px] text-slate-400 py-4 text-center">Loading…</div>
 
   const indexSet = new Set<number>()
   for (const n of log.nodes) for (const e of n.entries ?? []) indexSet.add(e.index)
   const allIndexes = Array.from(indexSet).sort((a, b) => b - a)
 
   if (allIndexes.length === 0)
-    return <div className="text-xs text-slate-400 py-4 text-center italic">No entries yet — submit a PUT.</div>
+    return <div className="text-[11px] text-slate-400 py-4 text-center italic">No entries yet — PUT a key.</div>
 
-  const nodeMaps = log.nodes.map((n) => {
-    const m = new Map(n.entries?.map((e) => [e.index, e]))
-    return { node: n, map: m }
-  })
+  const nodeMaps = log.nodes.map((n) => ({
+    node: n,
+    map: new Map(n.entries?.map((e) => [e.index, e])),
+  }))
 
   const maxCommit = Math.max(0, ...log.nodes.map((n) => n.commit_index))
   const maxLast   = Math.max(0, ...log.nodes.map((n) => n.last_index))
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-      {/* progress bar */}
       <div className="h-1 bg-slate-100">
-        <div
-          className="h-full bg-green-500 transition-all"
-          style={{ width: `${maxLast ? (maxCommit / maxLast) * 100 : 0}%` }}
-        />
+        <div className="h-full bg-green-500 transition-all"
+          style={{ width: `${maxLast ? (maxCommit / maxLast) * 100 : 0}%` }} />
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-36">
         <table className="w-full text-[10px] font-mono">
-          <thead>
+          <thead className="sticky top-0 bg-white">
             <tr className="border-b border-slate-100">
-              <th className="text-left px-2 py-1.5 text-slate-400 font-semibold">idx</th>
+              <th className="text-left px-2 py-1 text-slate-400 font-semibold">idx</th>
               {nodeMaps.map(({ node }) => (
-                <th key={node.node} className="text-left px-2 py-1.5 text-slate-400 font-semibold">{node.node}</th>
+                <th key={node.node} className="text-left px-2 py-1 text-slate-400 font-semibold">{node.node}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {allIndexes.map((idx) => (
-              <tr key={idx} className="border-t border-slate-50">
-                <td className="px-2 py-1 text-slate-400">{idx}</td>
+              <tr key={idx} className="border-t border-slate-50 hover:bg-slate-50">
+                <td className="px-2 py-0.5 text-slate-400">{idx}</td>
                 {nodeMaps.map(({ node, map }) => {
                   const e = map.get(idx)
-                  if (!e) return <td key={node.node} className="px-2 py-1 text-slate-300">—</td>
+                  if (!e) return <td key={node.node} className="px-2 py-0.5 text-slate-300">—</td>
                   const cls = e.committed
                     ? 'bg-green-100 text-green-700 border border-green-200'
                     : 'bg-blue-100 text-blue-700 border border-blue-200'
                   return (
                     <td key={node.node} className="px-2 py-0.5">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${cls}`} title={e.data}>
-                        t{e.term} {(e.data ?? '').slice(0, 12)}
+                      <span className={`inline-block px-1 py-0.5 rounded ${cls}`} title={e.data}>
+                        t{e.term} {(e.data ?? '').slice(0, 10)}
                       </span>
                     </td>
                   )

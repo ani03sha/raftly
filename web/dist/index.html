@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Raftly — UI not built</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #070a13;
+        color: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .box {
+        max-width: 520px;
+        padding: 2rem;
+        border: 1px solid #1e293b;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.5);
+      }
+      h1 { margin-top: 0; color: #10b981; }
+      code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+      a { color: #10b981; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Raftly UI not built</h1>
+      <p>This is the placeholder shell. The real dashboard is produced by the Vite build.</p>
+      <p><strong>To build it:</strong></p>
+      <p><code>cd ui && npm install && npm run build</code> then copy <code>ui/dist/*</code> into <code>web/dist/</code>.</p>
+      <p>Or just run <code>docker compose up --build</code> — the Dockerfile does it for you.</p>
+      <p style="margin-bottom: 0; font-size: 0.85em; color: #64748b;">
+        Backend endpoints are still live: <code>/status</code>, <code>/keys/&lt;k&gt;</code>, <code>/api/cluster</code>, <code>/api/events</code>.
+      </p>
+    </div>
+  </body>
+</html>

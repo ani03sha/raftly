@@ -123,8 +123,10 @@ type RaftNode struct {
 	// Channels
 	// commitCh: applied entries flow out here to the application layer (key-value store).
 	// stopCh: closing this channel signals all goroutines to exit.
-	commitCh chan LogEntry
-	stopCh chan struct {}
+	// timingUpdateCh: sends a new heartbeat interval to run() so it resets its ticker live.
+	commitCh        chan LogEntry
+	stopCh          chan struct{}
+	timingUpdateCh  chan time.Duration
 
 	// Proposal tracking
 	// When Propose() is called, we register a result channel keyed by logIndex.
@@ -184,9 +186,10 @@ func NewRaftNode(config *Config, transport Transport) (*RaftNode, error) {
 		wal: wal,
 		peers: peers,
 		transport: transport,
-		commitCh: make(chan LogEntry, 256),
-		stopCh: make(chan struct{}),
-		proposals: make(map[uint64]chan proposeResult),
+		commitCh:       make(chan LogEntry, 256),
+		stopCh:         make(chan struct{}),
+		timingUpdateCh: make(chan time.Duration, 1),
+		proposals:      make(map[uint64]chan proposeResult),
 		logger: logger,
 	}, nil
 }
@@ -307,10 +310,37 @@ func (n *RaftNode) Status() NodeStatus {
 }
 
 
+// Returns the current election timeout base and heartbeat interval.
+func (n *RaftNode) GetTimings() (electionTimeout, heartbeat time.Duration) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.config.ElectionTimeout, n.config.HeartbeatInterval
+}
+
+
 // Returns the read-only channel of committed entries.
 // The application layer consumes this to apply writes to the state machine.
 func (n *RaftNode) CommitCh() <-chan LogEntry {
 	return n.commitCh
+}
+
+
+// Returns the last `limit` entries from this node's log. Used by the dashboard
+// to visualize replication progress across the cluster.
+func (n *RaftNode) LogSnapshot(limit int) []LogEntry {
+	last := n.log.LastIndex()
+	if last == 0 || limit <= 0 {
+		return nil
+	}
+	from := uint64(1)
+	if uint64(limit) < last {
+		from = last - uint64(limit) + 1
+	}
+	entries, err := n.log.GetEntries(from, last+1)
+	if err != nil {
+		return nil
+	}
+	return entries
 }
 
 
@@ -430,7 +460,10 @@ func (n * RaftNode) resetElectionTimer() {
 // This is the only goroutine that drives the election timer.
 // All other goroutines (replication, apply) are spawned from here or from becomeLeader.
 func (n *RaftNode) run() {
-	heartbeatTicker := time.NewTicker(n.config.HeartbeatInterval)
+	n.mu.Lock()
+	hbInterval := n.config.HeartbeatInterval
+	n.mu.Unlock()
+	heartbeatTicker := time.NewTicker(hbInterval)
 	defer heartbeatTicker.Stop()
 
 	for {
@@ -457,9 +490,43 @@ func (n *RaftNode) run() {
 				n.resetElectionTimer()
 				n.mu.Unlock()
 			}
+		// Live timing update: reset heartbeat ticker without restarting the node.
+		case newInterval := <-n.timingUpdateCh:
+			heartbeatTicker.Stop()
+			heartbeatTicker = time.NewTicker(newInterval)
 		case <-n.stopCh:
 			return
 		}
+	}
+}
+
+
+// UpdateTimings changes election timeout and heartbeat interval on a live node.
+// Election timeout takes effect on the next timer reset (within one heartbeat).
+// Heartbeat takes effect immediately via the run() loop.
+// Pass 0 to leave a value unchanged.
+func (n *RaftNode) UpdateTimings(electionTimeout, heartbeat time.Duration) {
+	n.mu.Lock()
+	if electionTimeout > 0 {
+		n.config.ElectionTimeout = electionTimeout
+	}
+	newHB := n.config.HeartbeatInterval
+	if heartbeat > 0 {
+		n.config.HeartbeatInterval = heartbeat
+		newHB = heartbeat
+	}
+	n.mu.Unlock()
+
+	// Non-blocking send: if run() is busy, the next send will overwrite anyway.
+	select {
+	case n.timingUpdateCh <- newHB:
+	default:
+		// Drain the stale value and re-send the latest.
+		select {
+		case <-n.timingUpdateCh:
+		default:
+		}
+		n.timingUpdateCh <- newHB
 	}
 }
 

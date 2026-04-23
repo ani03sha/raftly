@@ -81,6 +81,34 @@ func (p *NetworkProxy) ClearRules() {
 }
 
 
+// Returns a copy of the current rule set. Used by the dashboard to render
+// active chaos.
+func (p *NetworkProxy) Rules() []ProxyRule {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]ProxyRule, len(p.rules))
+	copy(out, p.rules)
+	return out
+}
+
+
+// Returns the string name for a ProxyAction. Useful for JSON serialization.
+func (a ProxyAction) String() string {
+	switch a {
+	case ActionPass:
+		return "pass"
+	case ActionDrop:
+		return "drop"
+	case ActionDelay:
+		return "delay"
+	case ActionLoss:
+		return "loss"
+	default:
+		return "unknown"
+	}
+}
+
+
 // Evaluates the rules list for a message traveling from -> to.
 // Returns:
 //    deliver bool - false means drop the message silently

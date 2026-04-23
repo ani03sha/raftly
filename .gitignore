@@ -34,3 +34,9 @@ go.work.sum
 
 PROJECT_OVERVIEW.md
 data/
+
+# UI build artifacts (web/dist is committed as a placeholder shell;
+# docker build overwrites it with the real Vite bundle)
+ui/node_modules/
+ui/dist/
+ui/.vite/

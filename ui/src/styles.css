@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --header-h: 52px;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #cfd8f0;
+  color: #0f172a;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leader pulse — emerald */
+@keyframes leader-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(5, 150, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+}
+.leader-pulse { animation: leader-pulse 2s infinite; }
+
+/* Slide in for new events */
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.slide-in { animation: slide-in 0.2s ease-out; }
+
+/* Replication edge animation */
+@keyframes dash {
+  to { stroke-dashoffset: -20; }
+}
+.edge-animate {
+  stroke-dasharray: 5 5;
+  animation: dash 0.9s linear infinite;
+}
+
+/* Thin, tasteful scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }

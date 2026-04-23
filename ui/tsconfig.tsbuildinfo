@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/types.ts","./src/components/chaospanel.tsx","./src/components/clustercolumn.tsx","./src/components/controlcolumn.tsx","./src/components/eventfeed.tsx","./src/components/kvpanel.tsx","./src/components/scenariopanel.tsx","./src/components/settingspanel.tsx","./vite.config.ts"],"version":"5.9.3"}

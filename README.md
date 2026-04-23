@@ -15,8 +15,9 @@ Most distributed systems guides teach you how things work when they go right. Th
 5. [Benchmarks](#5-benchmarks)
 6. [Implementation Highlights](#6-implementation-highlights)
 7. [Running Locally](#7-running-locally)
-8. [Docker Deployment](#8-docker-deployment)
-9. [References](#9-references)
+8. [Dashboard (UI)](#8-dashboard-ui)
+9. [Docker Deployment](#9-docker-deployment)
+10. [References](#10-references)
 
 ---
 
@@ -336,22 +337,140 @@ curl http://localhost:8001/status
 
 ---
 
-## 8. Docker Deployment
+## 8. Dashboard (UI)
 
-Starts a 3-node cluster with Prometheus metrics and a Grafana dashboard.
+The dashboard is a React app embedded directly in the server binary: no separate process, no build step at runtime. After starting the cluster, open **http://localhost:8001** in a browser.
+
+### Layout
+
+The UI is a fixed three-column viewport. Nothing scrolls at the page level; each column manages its own content.
+
+![Raftly UI](/docs/raftly_ui.png)
+
+---
+
+### Left Column: Cluster State
+
+**Health strip** at the top shows four pills that update every 500ms via SSE:
+
+| Pill     | What it shows                                                                   |
+| -------- | ------------------------------------------------------------------------------- |
+| `health` | `HEALTHY` (green) · `DEGRADED` (amber) · `PARTITIONED` (red) · `CRITICAL` (red) |
+| `leader` | Current leader node ID, or `—` if no leader elected                             |
+| `term`   | Current Raft term across the cluster                                            |
+| `nodes`  | Reachable nodes out of total, e.g. `3/3`                                        |
+
+**Topology SVG** renders all nodes as circles connected by edges:
+
+| Color               | Meaning                                         |
+| ------------------- | ----------------------------------------------- |
+| Green circle        | Leader                                          |
+| Blue circle         | Follower                                        |
+| Amber circle        | Candidate (mid-election)                        |
+| Red circle          | Down or partitioned                             |
+| Green edge          | Healthy replication link (animated from leader) |
+| Dashed red edge + ✕ | Partitioned link                                |
+| Purple edge         | Delayed link (label shows `Nms`)                |
+| Amber edge          | Lossy link (label shows `N%`)                   |
+
+**Node cards** show per-node state, term, and commit index. Cards turn red when a node is down or partitioned.
+
+**Replication log** table shows the last 10 committed entries across all nodes. Green cells = committed; blue cells = replicated but not yet committed. A progress bar at the top shows `commitIndex / lastIndex`.
+
+---
+
+### Center Column: Controls
+
+Four tabs, each with an interactive top section and a contextual explainer below.
+
+#### Scenarios tab
+
+Five pre-built scenarios that automate chaos injection, observation, and healing:
+
+| Scenario               | What it does                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| **Happy path**         | Writes 5 keys back-to-back; shows clean replication across all nodes               |
+| **Leader crash**       | Isolates the leader; remaining majority elects a replacement within ~300ms         |
+| **Minority partition** | Isolates one follower; majority keeps committing; isolated node can't win election |
+| **Packet loss**        | Injects 40% loss on a follower; commits advance via retries, no election fires     |
+| **Slow follower**      | Adds 300ms latency to a follower; leader uses fast peer for quorum                 |
+
+To run: click a scenario tab → read the steps → click **Run scenario**. The button shows a spinner while running. All destructive scenarios auto-heal after the delay configured in Settings.
+
+#### Chaos tab
+
+Manual fault injection with four modes:
+
+| Mode          | What it does                                                                |
+| ------------- | --------------------------------------------------------------------------- |
+| **Isolate**   | Blackholes all Raft traffic to/from the target node                         |
+| **Partition** | Drops traffic between two specific nodes only, all other links stay healthy |
+| **Delay**     | Adds `delay ± jitter` ms latency to a node's Raft messages                  |
+| **Loss**      | Drops a configurable percentage of packets on a node (slider: 5%–95%)       |
+
+Click **Heal all** at the top of the panel to clear every rule on every node simultaneously. Active rules are shown at the bottom of the panel.
+
+> The chaos proxy intercepts **gRPC (Raft RPC) traffic only**. HTTP calls (KV ops, cluster API, status polling) always pass through — this is why Heal always works even when a node is fully isolated at the Raft level.
+
+#### KV ops tab
+
+Interact directly with the replicated key-value store:
+
+- **PUT** — proposes a write through Raft. The entry appears in the replication log as blue (replicated) then green (committed).
+- **GET** — reads from the leader's state machine. Always linearizable — reflects all prior commits.
+- **DELETE** — proposes a delete command through the same Raft pipeline as PUT.
+
+If the node you're hitting is not the leader it transparently proxies the request. The "Routed to leader" label at the top shows who handled it.
+
+#### Settings tab
+
+Adjust cluster parameters live — no restart required:
+
+| Setting                | Range     | Effect                                                                                                                                                                     |
+| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Election timeout**   | 50–2000ms | How long followers wait before starting an election. Default: 150ms. Increasing this makes the cluster more stable; decreasing it makes elections fire faster under chaos. |
+| **Heartbeat interval** | 10–500ms  | How often the leader sends AppendEntries. Default: 50ms. Must stay well below election timeout (rule of thumb: `heartbeat ≤ timeout / 5`).                                 |
+| **Auto-heal delay**    | 2–30s     | How long Scenarios wait before healing after injecting chaos. Increase this to give more time to observe leader elections. Default: 4s.                                    |
+
+Click **Apply to all nodes** to fan out changes to the entire cluster. The UI validates that heartbeat < election timeout before allowing apply. Click **Reset** to restore defaults.
+
+---
+
+### Right Column: Event Timeline
+
+A live stream of cluster and local events, newest first. Events are color-coded:
+
+| Color     | Event type                            |
+| --------- | ------------------------------------- |
+| Green     | `leader_change` — new leader elected  |
+| Amber     | `term_change` — term incremented      |
+| Red       | `node_down` — node became unreachable |
+| Blue      | `node_up` — node recovered            |
+| Red (dim) | Local chaos injection                 |
+| Purple    | Local scenario step                   |
+| Grey      | Local KV operation                    |
+
+Cluster events arrive over SSE from the server. Local events (chaos, KV, scenario steps) are generated client-side and merged into the same timeline.
+
+---
+
+## 9. Docker Deployment
+
+Starts a 3-node cluster with the embedded dashboard, Prometheus metrics, and a Grafana dashboard — one command.
 
 ```bash
 make docker-build
 make docker-up
 ```
 
-| Service       | URL                                 |
-| ------------- | ----------------------------------- |
-| Node 1 (HTTP) | http://localhost:8001               |
-| Node 2 (HTTP) | http://localhost:8002               |
-| Node 3 (HTTP) | http://localhost:8003               |
-| Prometheus    | http://localhost:9090               |
-| Grafana       | http://localhost:3000 (admin/admin) |
+| Service            | URL                                 | Notes                                |
+| ------------------ | ----------------------------------- | ------------------------------------ |
+| **Dashboard (UI)** | **http://localhost:8001**           | Open this — embedded React app       |
+| Node 1 API         | http://localhost:8001               | Also accepts raw curl requests       |
+| Node 2 API         | http://localhost:8002               | Followers proxy writes to the leader |
+| Node 3 API         | http://localhost:8003               |                                      |
+| Prometheus         | http://localhost:9090               |                                      |
+| Grafana            | http://localhost:3000 (admin/admin) |                                      |
 
 **Grafana dashboard panels:**
 
@@ -381,7 +500,7 @@ docker compose -f docker/docker-compose.yml down -v
 
 ---
 
-## 9. References
+## 10. References
 
 **Papers:**
 
